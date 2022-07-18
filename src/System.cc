@@ -722,10 +722,10 @@ void System::SaveTrajectoryEuRoC(const string &filename)
         if(*lbL)
             continue;
 
-
+        // pKF is the reference keyframe
         KeyFrame* pKF = *lRit;
         //cout << "KF: " << pKF->mnId << endl;
-
+        // NOTES: Trw: world -> refrence
         Sophus::SE3f Trw;
 
         // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
@@ -737,6 +737,7 @@ void System::SaveTrajectoryEuRoC(const string &filename)
         while(pKF->isBad())
         {
             //cout << " 2.bad" << endl;
+            // Tcp: parent -> camera
             Trw = Trw * pKF->mTcp;
             pKF = pKF->GetParent();
             //cout << "--Parent KF: " << pKF->mnId << endl;
@@ -756,6 +757,7 @@ void System::SaveTrajectoryEuRoC(const string &filename)
 
         if (mSensor == IMU_MONOCULAR || mSensor == IMU_STEREO || mSensor==IMU_RGBD)
         {
+            // T(body -> world) =  inverse:  T(camera -> body ) * T(refrence-> camera) * T(world -> reference)
             Sophus::SE3f Twb = (pKF->mImuCalib.mTbc * (*lit) * Trw).inverse();
             Eigen::Quaternionf q = Twb.unit_quaternion();
             Eigen::Vector3f twb = Twb.translation();
@@ -763,6 +765,7 @@ void System::SaveTrajectoryEuRoC(const string &filename)
         }
         else
         {
+            // T(camera -> world) = inverse: T(refrence-> camera) * T(world -> reference)
             Sophus::SE3f Twc = ((*lit)*Trw).inverse();
             Eigen::Quaternionf q = Twc.unit_quaternion();
             Eigen::Vector3f twc = Twc.translation();

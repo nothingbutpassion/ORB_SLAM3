@@ -237,10 +237,13 @@ namespace ORB_SLAM3 {
 
             calibration1_ = new Pinhole(vCalibration);
             originalCalib1_ = new Pinhole(vCalibration);
-
+            
             //Rectified images are assumed to be ideal PinHole images (no distortion)
+            //NOTES: This is the case such as the image captured by mobile phone
         }
         else if(cameraModel == "KannalaBrandt8"){
+
+            // NOTES: KannalaBrandt is a kind of fisheye distortion model
             cameraType_ = KannalaBrandt;
 
             //Read intrinsic parameters

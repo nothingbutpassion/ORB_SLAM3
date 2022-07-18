@@ -48,6 +48,7 @@ int main(int argc, char *argv[])
 
     const int num_seq = (argc-3)/2;
     cout << "num_seq = " << num_seq << endl;
+    // The last arg is the save path of camera trajectory if specified
     bool bFileName= (((argc-3) % 2) == 1);
     string file_name;
     if (bFileName)
@@ -106,6 +107,7 @@ int main(int argc, char *argv[])
 
         while(vTimestampsImu[seq][first_imu[seq]]<=vTimestampsCam[seq][0])
             first_imu[seq]++;
+        // @comment make sure: first imu timestamp <= first image timestamp
         first_imu[seq]--; // first imu measurement to be considered
 
     }
@@ -117,7 +119,12 @@ int main(int argc, char *argv[])
     cout.precision(17);
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
+    // NOTES: 
+    // argv[1] - path_to_vocabulary, 
+    // argv[2] - path_to_settings
     ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::IMU_MONOCULAR, true);
+    
+    // NOTES: imageScale can be set by "Camera.imageScale" in setting file (default is 1.0)
     float imageScale = SLAM.GetImageScale();
 
     double t_resize = 0.f;
@@ -154,6 +161,7 @@ int main(int argc, char *argv[])
                 std::chrono::monotonic_clock::time_point t_Start_Resize = std::chrono::monotonic_clock::now();
     #endif
 #endif
+                // Resize image if imageScale != 1.f
                 int width = im.cols * imageScale;
                 int height = im.rows * imageScale;
                 cv::resize(im, im, cv::Size(width, height));
@@ -164,17 +172,18 @@ int main(int argc, char *argv[])
                 std::chrono::monotonic_clock::time_point t_End_Resize = std::chrono::monotonic_clock::now();
     #endif
                 t_resize = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t_End_Resize - t_Start_Resize).count();
+                // Insert resize time
                 SLAM.InsertResizeTime(t_resize);
 #endif
             }
 
             // Load imu measurements from previous frame
             vImuMeas.clear();
-
+            // NOTES: Add imu data since the 2nd frame (not 1st frame)
             if(ni>0)
             {
                 // cout << "t_cam " << tframe << endl;
-
+                // NOTES: all added imu timestamp <= image stamp
                 while(vTimestampsImu[seq][first_imu[seq]]<=vTimestampsCam[seq][ni])
                 {
                     vImuMeas.push_back(ORB_SLAM3::IMU::Point(vAcc[seq][first_imu[seq]].x,vAcc[seq][first_imu[seq]].y,vAcc[seq][first_imu[seq]].z,
@@ -192,6 +201,7 @@ int main(int argc, char *argv[])
 
             // Pass the image to the SLAM system
             // cout << "tframe = " << tframe << endl;
+            // Track 1 image frame + N imu frames (no imu data for 1st image frame) 
             SLAM.TrackMonocular(im,tframe,vImuMeas); // TODO change to monocular_inertial
 
     #ifdef COMPILEDWITHC11
@@ -202,6 +212,7 @@ int main(int argc, char *argv[])
 
 #ifdef REGISTER_TIMES
             t_track = t_resize + std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2 - t1).count();
+            // Insert Track time
             SLAM.InsertTrackTime(t_track);
 #endif
 
@@ -248,7 +259,8 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
+ 
+// Get image file paths & timestamps. In file strPathTimes, each line is a timestamp.
 void LoadImages(const string &strImagePath, const string &strPathTimes,
                 vector<string> &vstrImages, vector<double> &vTimeStamps)
 {
@@ -273,6 +285,8 @@ void LoadImages(const string &strImagePath, const string &strPathTimes,
     }
 }
 
+
+// Get imu data from strImuPath, each line format is: timestamp, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z
 void LoadIMU(const string &strImuPath, vector<double> &vTimeStamps, vector<cv::Point3f> &vAcc, vector<cv::Point3f> &vGyro)
 {
     ifstream fImu;
