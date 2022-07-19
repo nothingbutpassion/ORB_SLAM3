@@ -25,6 +25,9 @@
 namespace ORB_SLAM3 {
 //BOOST_CLASS_EXPORT_GUID(KannalaBrandt8, "KannalaBrandt8")
 
+    // NOTES:
+    // KannalaBrandt8 is actually a fisheye model (opencv has same implementation)
+    // see https://docs.opencv.org/5.x/db/d58/group__calib3d__fisheye.html
     cv::Point2f KannalaBrandt8::project(const cv::Point3f &p3D) {
         const float x2_plus_y2 = p3D.x * p3D.x + p3D.y * p3D.y;
         const float theta = atan2f(sqrtf(x2_plus_y2), p3D.z);
@@ -115,6 +118,17 @@ namespace ORB_SLAM3 {
 
     cv::Point3f KannalaBrandt8::unproject(const cv::Point2f &p2D) {
         //Use Newthon method to solve for theta with good precision (err ~ e-6)
+        // NOTES:
+        // To solve f(x) = 0
+        // The Newthon iteration is: 
+        //     x_n+1 = x_n - f(x_n)/df(x_n) where df(x_n) is grad of f respect to x_n
+        // The key idea is first order approximation:
+        //     f(x_n+1) = f(x_n) +  df(x_n) * (x_n+1 - x_n)
+        // To solve theta with theta_d given, we have the following equation:
+        //     f(theta) = theta * (1 + k0*theta^2 + k1*theta^4 + k2*theta^6 + k3*theta^8) = theta_d
+        //     f(theta) - theta_d = 0
+        // So, the iteration is:
+        //     theta_n+1 = theta_n - (f(theta_n) - theta_d)/df(theta_n)
         cv::Point2f pw((p2D.x - mvParameters[2]) / mvParameters[0], (p2D.y - mvParameters[3]) / mvParameters[1]);
         float scale = 1.f;
         float theta_d = sqrtf(pw.x * pw.x + pw.y * pw.y);
@@ -188,6 +202,7 @@ namespace ORB_SLAM3 {
         for(size_t i = 0; i < vKeys1.size(); i++) vPts1[i] = vKeys1[i].pt;
         for(size_t i = 0; i < vKeys2.size(); i++) vPts2[i] = vKeys2[i].pt;
 
+        // Call opencv function to undistort fisheye image points
         cv::Mat D = (cv::Mat_<float>(4,1) << mvParameters[4], mvParameters[5], mvParameters[6], mvParameters[7]);
         cv::Mat R = cv::Mat::eye(3,3,CV_32F);
         cv::Mat K = this->toK();
@@ -196,7 +211,7 @@ namespace ORB_SLAM3 {
 
         for(size_t i = 0; i < vKeys1.size(); i++) vKeysUn1[i].pt = vPts1[i];
         for(size_t i = 0; i < vKeys2.size(); i++) vKeysUn2[i].pt = vPts2[i];
-
+        // Use undistort image points and relative motion to compute 3d points
         return tvr->Reconstruct(vKeysUn1,vKeysUn2,vMatches12,T21,vP3D,vbTriangulated);
     }
 
@@ -216,6 +231,7 @@ namespace ORB_SLAM3 {
     bool KannalaBrandt8::epipolarConstrain(GeometricCamera* pCamera2, const cv::KeyPoint &kp1, const cv::KeyPoint &kp2,
                                            const Eigen::Matrix3f& R12, const Eigen::Vector3f& t12, const float sigmaLevel, const float unc) {
         Eigen::Vector3f p3D;
+        // Check if matched by Triangulating the given 2d points and checking reprojection error
         return this->TriangulateMatches(pCamera2,kp1,kp2,R12,t12,sigmaLevel,unc,p3D) > 0.0001f;
     }
 
@@ -261,6 +277,8 @@ namespace ORB_SLAM3 {
         Triangulate(p11,p22,eigTcw1,eigTcw2,x3D);
 
         //Check triangulation in front of cameras
+        // 3D point in first camera is:  (x1,y1,z1) = Rcw1 * x3D + Tcw1
+        // Here we only compute z1
         float z1 = Rcw1.row(2).dot(x3D)+Tcw1.translation()(2);
         if(z1<=0){  //Point is not in front of the first camera
             return false;

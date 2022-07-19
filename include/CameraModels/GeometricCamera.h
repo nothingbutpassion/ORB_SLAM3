@@ -39,6 +39,10 @@
 #include "Converter.h"
 #include "GeometricTools.h"
 
+//
+// References:
+// https://github.com/UZ-SLAMLab/ORB_SLAM3/issues/102
+//    For fisheye camera, which model is better? 
 namespace ORB_SLAM3 {
     class GeometricCamera {
 

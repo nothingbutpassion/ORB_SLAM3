@@ -28,6 +28,8 @@ namespace ORB_SLAM3 {
     long unsigned int GeometricCamera::nNextId=0;
 
     cv::Point2f Pinhole::project(const cv::Point3f &p3D) {
+        // u = fx*x/z + cx
+        // v = fy*y/z + cy
         return cv::Point2f(mvParameters[0] * p3D.x / p3D.z + mvParameters[2],
                            mvParameters[1] * p3D.y / p3D.z + mvParameters[3]);
     }
@@ -59,16 +61,28 @@ namespace ORB_SLAM3 {
     }
 
     Eigen::Vector3f Pinhole::unprojectEig(const cv::Point2f &p2D) {
+        // x = (u - cx)/fx
+        // y = (v - cy)/fy
+        // z = 1
         return Eigen::Vector3f((p2D.x - mvParameters[2]) / mvParameters[0], (p2D.y - mvParameters[3]) / mvParameters[1],
                            1.f);
     }
 
     cv::Point3f Pinhole::unproject(const cv::Point2f &p2D) {
+        // x = (u - cx)/fx
+        // y = (v - cy)/fy
+        // z = 1
         return cv::Point3f((p2D.x - mvParameters[2]) / mvParameters[0], (p2D.y - mvParameters[3]) / mvParameters[1],
                            1.f);
     }
 
     Eigen::Matrix<double, 2, 3> Pinhole::projectJac(const Eigen::Vector3d &v3D) {
+        // u = fx*x/z + cx
+        // v = fy*y/z + cy
+        // 2x3 Jacobian matrix:
+        // du/dx, du/dy, du/dz = fx/z, 0,     -fx*x/(z*z)
+        // dv/dx, dv/dy, dv/dz = 0,    fy/z,  -fy*y/(z*z)
+        //
         Eigen::Matrix<double, 2, 3> Jac;
         Jac(0, 0) = mvParameters[0] / v3D[2];
         Jac(0, 1) = 0.f;
@@ -106,6 +120,8 @@ namespace ORB_SLAM3 {
 
     bool Pinhole::epipolarConstrain(GeometricCamera* pCamera2,  const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const Eigen::Matrix3f& R12, const Eigen::Vector3f& t12, const float sigmaLevel, const float unc) {
         //Compute Fundamental Matrix
+        //    E12 = t12x * R12
+        //    F12 = K1.t.inverse * E12 * K2.inverse
         Eigen::Matrix3f t12x = Sophus::SO3f::hat(t12);
         Eigen::Matrix3f K1 = this->toK_();
         Eigen::Matrix3f K2 = pCamera2->toK_();
@@ -123,8 +139,10 @@ namespace ORB_SLAM3 {
         if(den==0)
             return false;
 
+        // Square distance from kp2 to Epipolar line: [a, b, c]
         const float dsqr = num*num/den;
 
+        // Epipolar Constrain: distance < threshold
         return dsqr<3.84*unc;
     }
 
