@@ -43,6 +43,7 @@ namespace IMU
 const float GRAVITY_VALUE=9.81;
 
 //IMU measurement (gyro, accelerometer and timestamp)
+//A IMU Point contains only 3 fields: acc, angle-velocity, timestamp
 class Point
 {
 public:
@@ -52,8 +53,8 @@ public:
     Point(const cv::Point3f Acc, const cv::Point3f Gyro, const double &timestamp):
         a(Acc.x,Acc.y,Acc.z), w(Gyro.x,Gyro.y,Gyro.z), t(timestamp){}
 public:
-    Eigen::Vector3f a;
-    Eigen::Vector3f w;
+    Eigen::Vector3f a;              // acc: x, y, z
+    Eigen::Vector3f w;              // gyr: x, y, z
     double t;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
@@ -83,8 +84,8 @@ public:
     friend std::ostream& operator<< (std::ostream &out, const Bias &b);
 
 public:
-    float bax, bay, baz;
-    float bwx, bwy, bwz;
+    float bax, bay, baz;                // acc bias
+    float bwx, bwy, bwz;                // gyr bias
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
@@ -119,10 +120,10 @@ public:
 
 public:
     // Sophus/Eigen implementation
-    Sophus::SE3<float> mTcb;
-    Sophus::SE3<float> mTbc;
-    Eigen::DiagonalMatrix<float,6> Cov, CovWalk;
-    bool mbIsSet;
+    Sophus::SE3<float> mTcb;                            // Transform: body -> camera
+    Sophus::SE3<float> mTbc;                            // Transform: camera -> body
+    Eigen::DiagonalMatrix<float,6> Cov, CovWalk;        // IMU noise convarience (matrix: 6x6), bias-walk convarience (matrix: 6x6)
+    bool mbIsSet;                                       // true if Set() called
 };
 
 //Integration of 1 gyro measurement
@@ -182,21 +183,27 @@ public:
     void SetNewBias(const Bias &bu_);
     IMU::Bias GetDeltaBias(const Bias &b_);
 
+    // Compute dR/dV/dP with given bias
     Eigen::Matrix3f GetDeltaRotation(const Bias &b_);
     Eigen::Vector3f GetDeltaVelocity(const Bias &b_);
     Eigen::Vector3f GetDeltaPosition(const Bias &b_);
 
+    // Compute dR/dV/dP with db
     Eigen::Matrix3f GetUpdatedDeltaRotation();
     Eigen::Vector3f GetUpdatedDeltaVelocity();
     Eigen::Vector3f GetUpdatedDeltaPosition();
 
+    // Return internal dR/dV/dP
     Eigen::Matrix3f GetOriginalDeltaRotation();
     Eigen::Vector3f GetOriginalDeltaVelocity();
     Eigen::Vector3f GetOriginalDeltaPosition();
 
+    // Return db
     Eigen::Matrix<float,6,1> GetDeltaBias();
 
+    // Return b
     Bias GetOriginalBias();
+    // Return bu
     Bias GetUpdatedBias();
 
     void printMeasurements() const {
@@ -209,15 +216,15 @@ public:
 
 public:
     float dT;
-    Eigen::Matrix<float,15,15> C;
-    Eigen::Matrix<float,15,15> Info;
+    Eigen::Matrix<float,15,15> C;                   // Covarience matrix of error (nR, nV, nP, nBg, nBa)
+    Eigen::Matrix<float,15,15> Info;                // Information matrix, seems never used!
     Eigen::DiagonalMatrix<float,6> Nga, NgaWalk;
 
     // Values for the original bias (when integration was computed)
     Bias b;
-    Eigen::Matrix3f dR;
-    Eigen::Vector3f dV, dP;
-    Eigen::Matrix3f JRg, JVg, JVa, JPg, JPa;
+    Eigen::Matrix3f dR;                         // measured Rotation value between 2 continual keyframe
+    Eigen::Vector3f dV, dP;                     // measured Velocity/Position value between 2 continual keyframe
+    Eigen::Matrix3f JRg, JVg, JVa, JPg, JPa;    // JRg: jacobians of dR wrt gyr-bias correction, The others are similar.
     Eigen::Vector3f avgA, avgW;
 
 

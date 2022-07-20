@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 
         while(vTimestampsImu[seq][first_imu[seq]]<=vTimestampsCam[seq][0])
             first_imu[seq]++;
-        // @comment make sure: first imu timestamp <= first image timestamp
+        // NOTES: first imu frame timestamp <= first image frame timestamp
         first_imu[seq]--; // first imu measurement to be considered
 
     }
@@ -261,6 +261,7 @@ int main(int argc, char *argv[])
 }
  
 // Get image file paths & timestamps. In file strPathTimes, each line is a timestamp.
+// image file path is like strImagePath/<timestamp>.png
 void LoadImages(const string &strImagePath, const string &strPathTimes,
                 vector<string> &vstrImages, vector<double> &vTimeStamps)
 {
@@ -286,7 +287,7 @@ void LoadImages(const string &strImagePath, const string &strPathTimes,
 }
 
 
-// Get imu data from strImuPath, each line format is: timestamp, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z
+// Get imu data from strImuPath, each line format is: timestamp,acc_x,acc_y,acc_z,gyr_x,gyr_y,gyr_z
 void LoadIMU(const string &strImuPath, vector<double> &vTimeStamps, vector<cv::Point3f> &vAcc, vector<cv::Point3f> &vGyro)
 {
     ifstream fImu;

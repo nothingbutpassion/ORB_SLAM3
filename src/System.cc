@@ -113,7 +113,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     {
         //Load ORB Vocabulary
         cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
-
+        // ORBVocabulary is just a typedef of DBoW2::TemplatedVocabulary in include/ORBVocabulary.h
+        // typedef DBoW2::TemplatedVocabulary<DBoW2::FORB::TDescriptor, DBoW2::FORB> ORBVocabulary;
         mpVocabulary = new ORBVocabulary();
         bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
         if(!bVocLoad)

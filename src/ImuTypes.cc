@@ -32,12 +32,16 @@ namespace IMU
 const float eps = 1e-4;
 
 Eigen::Matrix3f NormalizeRotation(const Eigen::Matrix3f &R){
+    // input: R (may not be rotation matrix)
+    // do SVD: R = U * D * Vt
+    // return: U * Vt
     Eigen::JacobiSVD<Eigen::Matrix3f> svd(R, Eigen::ComputeFullU | Eigen::ComputeFullV);
     return svd.matrixU() * svd.matrixV().transpose();
 }
 
 Eigen::Matrix3f RightJacobianSO3(const float &x, const float &y, const float &z)
 {
+    // It's easy, see paper: On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
     Eigen::Matrix3f I;
     I.setIdentity();
     const float d2 = x*x+y*y+z*z;
@@ -60,6 +64,7 @@ Eigen::Matrix3f RightJacobianSO3(const Eigen::Vector3f &v)
 
 Eigen::Matrix3f InverseRightJacobianSO3(const float &x, const float &y, const float &z)
 {
+    // It's easy, see paper: On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
     Eigen::Matrix3f I;
     I.setIdentity();
     const float d2 = x*x+y*y+z*z;
@@ -94,20 +99,22 @@ IntegratedRotation::IntegratedRotation(const Eigen::Vector3f &angVel, const Bias
     Eigen::Matrix3f W = Sophus::SO3f::hat(v);
     if(d<eps)
     {
-        deltaR = Eigen::Matrix3f::Identity() + W;
-        rightJ = Eigen::Matrix3f::Identity();
+        // Use first-order approximation
+        deltaR = Eigen::Matrix3f::Identity() + W;   // exp(W) ~ I + W
+        rightJ = Eigen::Matrix3f::Identity();       // Jr(W)  ~ I
     }
     else
     {
+        // See paper: On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
         deltaR = Eigen::Matrix3f::Identity() + W*sin(d)/d + W*W*(1.0f-cos(d))/d2;
-        rightJ = Eigen::Matrix3f::Identity() - W*(1.0f-cos(d))/d2 + W*W*(d-sin(d))/(d2*d);
+        rightJ = Eigen::Matrix3f::Identity() - W*(1.0f-cos(d))/d2 + W*W*(d-sin(d))/(d2*d); 
     }
 }
 
 Preintegrated::Preintegrated(const Bias &b_, const Calib &calib)
 {
-    Nga = calib.Cov;
-    NgaWalk = calib.CovWalk;
+    Nga = calib.Cov;                // Set IMU noise convarience matrix 6x6
+    NgaWalk = calib.CovWalk;        // Set Bias-walk convarience matrix 6x6 
     Initialize(b_);
 }
 
@@ -157,8 +164,8 @@ void Preintegrated::Initialize(const Bias &b_)
     C.setZero();
     Info.setZero();
     db.setZero();
-    b=b_;
-    bu=b_;
+    b=b_;               // Orignal bias
+    bu=b_;              // Updated bias
     avgA.setZero();
     avgW.setZero();
     dT=0.0f;
@@ -178,6 +185,18 @@ void Preintegrated::IntegrateNewMeasurement(const Eigen::Vector3f &acceleration,
 {
     mvMeasurements.push_back(integrable(acceleration,angVel,dt));
 
+
+    // NOTES:
+    // See Appendix A/B of paper: On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
+    // The state variables are:             ( R,  V,  P,  Bg, Ba)       where R = exp(phi^) , phi = (rx, ry, rz) is 3d vector
+    // The diffs between i and j frame are: (dR, dV, dP, dBg, dBa)
+    // The noise of i frame is:             (nR, nV, nP, nBg, nBa)_i
+    // The noise propagation between j-1 and j is:
+    // (nR, nV, nP)_j = A * (nR, nV, nP)_j-1 + B * (nBg, nBa)_j-1
+    // A is 9x9
+    // B is 9x6
+
+
     // Position is updated firstly, as it depends on previously computed velocity and rotation.
     // Velocity is updated secondly, as it depends on previously computed rotation.
     // Rotation is the last to be updated.
@@ -192,8 +211,8 @@ void Preintegrated::IntegrateNewMeasurement(const Eigen::Vector3f &acceleration,
     acc << acceleration(0)-b.bax, acceleration(1)-b.bay, acceleration(2)-b.baz;
     accW << angVel(0)-b.bwx, angVel(1)-b.bwy, angVel(2)-b.bwz;
 
-    avgA = (dT*avgA + dR*acc*dt)/(dT+dt);
-    avgW = (dT*avgW + accW*dt)/(dT+dt);
+    avgA = (dT*avgA + dR*acc*dt)/(dT+dt);       // Compute average acc
+    avgW = (dT*avgW + accW*dt)/(dT+dt);         // Compute average gyr
 
     // Update delta position dP and velocity dV (rely on no-updated delta rotation)
     dP = dP + dV*dt + 0.5f*dR*acc*dt*dt;
@@ -201,7 +220,7 @@ void Preintegrated::IntegrateNewMeasurement(const Eigen::Vector3f &acceleration,
 
     // Compute velocity and position parts of matrices A and B (rely on non-updated delta rotation)
     Eigen::Matrix<float,3,3> Wacc = Sophus::SO3f::hat(acc);
-
+    // See Appendix A of the paper
     A.block<3,3>(3,0) = -dR*dt*Wacc;
     A.block<3,3>(6,0) = -0.5f*dR*dt*dt*Wacc;
     A.block<3,3>(6,3) = Eigen::DiagonalMatrix<float,3>(dt, dt, dt);
@@ -209,6 +228,7 @@ void Preintegrated::IntegrateNewMeasurement(const Eigen::Vector3f &acceleration,
     B.block<3,3>(6,3) = 0.5f*dR*dt*dt;
 
 
+    // See Appendix B of the paper
     // Update position and velocity jacobians wrt bias correction
     JPa = JPa + JVa*dt -0.5f*dR*dt*dt;
     JPg = JPg + JVg*dt -0.5f*dR*dt*dt*Wacc*JRg;
@@ -251,7 +271,7 @@ void Preintegrated::MergePrevious(Preintegrated* pPrev)
 
     const std::vector<integrable > aux1 = pPrev->mvMeasurements;
     const std::vector<integrable> aux2 = mvMeasurements;
-
+    // NOTES: Use current updated bias to initialize
     Initialize(bav);
     for(size_t i=0;i<aux1.size();i++)
         IntegrateNewMeasurement(aux1[i].a,aux1[i].w,aux1[i].t);
@@ -263,8 +283,10 @@ void Preintegrated::MergePrevious(Preintegrated* pPrev)
 void Preintegrated::SetNewBias(const Bias &bu_)
 {
     std::unique_lock<std::mutex> lock(mMutex);
+    // Set updated bias
     bu = bu_;
 
+    // Compute diff between original and updated bias
     db(0) = bu_.bwx-b.bwx;
     db(1) = bu_.bwy-b.bwy;
     db(2) = bu_.bwz-b.bwz;
@@ -402,7 +424,13 @@ void Calib::Set(const Sophus::SE3<float> &sophTbc, const float &ng, const float 
     // Sophus/Eigen
     mTbc = sophTbc;
     mTcb = mTbc.inverse();
+    
+    // IMU noise covariance matrix: 6x6, variables: gyr_x, gyr_y, gyr_z, acc_x, acc_y, acc_z 
+    // gyr_x, gyr_y, gyr_z has same variance
+    // acc_x, acc_y, acc_z has same variance
     Cov.diagonal() << ng2, ng2, ng2, na2, na2, na2;
+    
+    // IMU bias-walk noise covariance matrix: 6x6, variables: gyr_bias_walk_x/y/z, acc_bias__walk_x/y/z
     CovWalk.diagonal() << ngw2, ngw2, ngw2, naw2, naw2, naw2;
 }
 
