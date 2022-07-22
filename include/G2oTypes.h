@@ -76,15 +76,15 @@ class ImuCamPose
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     ImuCamPose(){}
-    ImuCamPose(KeyFrame* pKF);
-    ImuCamPose(Frame* pF);
-    ImuCamPose(Eigen::Matrix3d &_Rwc, Eigen::Vector3d &_twc, KeyFrame* pKF);
+    ImuCamPose(KeyFrame* pKF);                                                      // Construct from KeyFrame
+    ImuCamPose(Frame* pF);                                                          // Construct from Frame
+    ImuCamPose(Eigen::Matrix3d &_Rwc, Eigen::Vector3d &_twc, KeyFrame* pKF);     // Construct from KeyFrame, only set for first camera
 
     void SetParam(const std::vector<Eigen::Matrix3d> &_Rcw, const std::vector<Eigen::Vector3d> &_tcw, const std::vector<Eigen::Matrix3d> &_Rbc,
                   const std::vector<Eigen::Vector3d> &_tbc, const double &_bf);
 
-    void Update(const double *pu); // update in the imu reference
-    void UpdateW(const double *pu); // update in the world reference
+    void Update(const double *pu);    // update in the imu reference,   first update: twb,Rwb, then otherss
+    void UpdateW(const double *pu); // update in the world reference, first update: Rwb,twb, then others
     Eigen::Vector2d Project(const Eigen::Vector3d &Xw, int cam_idx=0) const; // Mono
     Eigen::Vector3d ProjectStereo(const Eigen::Vector3d &Xw, int cam_idx=0) const; // Stereo
     bool isDepthPositive(const Eigen::Vector3d &Xw, int cam_idx=0) const;
@@ -114,8 +114,12 @@ class InvDepthPoint
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     InvDepthPoint(){}
+    // Construction:
+    // u(_u), v(_v), rho(_rho),
+    // fx(pHostKF->fx), fy(pHostKF->fy), cx(pHostKF->cx), cy(pHostKF->cy), bf(pHostKF->mbf)
     InvDepthPoint(double _rho, double _u, double _v, KeyFrame* pHostKF);
 
+    // Update: rho += *pu;
     void Update(const double *pu);
 
     double rho;
@@ -193,8 +197,8 @@ class VertexVelocity : public g2o::BaseVertex<3,Eigen::Vector3d>
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     VertexVelocity(){}
-    VertexVelocity(KeyFrame* pKF);
-    VertexVelocity(Frame* pF);
+    VertexVelocity(KeyFrame* pKF);     // Equal to setEstimate(pKF->mVw)
+    VertexVelocity(Frame* pF);         // Equal to setEstimate(pF->mVw)
 
     virtual bool read(std::istream& is){return false;}
     virtual bool write(std::ostream& os) const{return false;}
@@ -214,8 +218,8 @@ class VertexGyroBias : public g2o::BaseVertex<3,Eigen::Vector3d>
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     VertexGyroBias(){}
-    VertexGyroBias(KeyFrame* pKF);
-    VertexGyroBias(Frame* pF);
+    VertexGyroBias(KeyFrame* pKF);          // Equal to setEstimate(pKF->mImuBias);
+    VertexGyroBias(Frame* pF);              // Equal to setEstimate(pKF->mImuBias);
 
     virtual bool read(std::istream& is){return false;}
     virtual bool write(std::ostream& os) const{return false;}
@@ -235,9 +239,9 @@ class VertexAccBias : public g2o::BaseVertex<3,Eigen::Vector3d>
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    VertexAccBias(){}
-    VertexAccBias(KeyFrame* pKF);
-    VertexAccBias(Frame* pF);
+    VertexAccBias(){}    
+    VertexAccBias(KeyFrame* pKF);       // Equal to setEstimate(pKF->mImuBias);
+    VertexAccBias(Frame* pF);           // Equal to setEstimate(pF->mImuBias);
 
     virtual bool read(std::istream& is){return false;}
     virtual bool write(std::ostream& os) const{return false;}
@@ -263,6 +267,9 @@ public:
 
     void Update(const double *pu)
     {
+        // NOTES:
+        // We want to rotate gravity to align with axis Z
+        // So, the rotation axis is (dx,dy,0) —— which is in X-0-Y plane
         Rwg=Rwg*ExpSO3(pu[0],pu[1],0.0);
     }
 
@@ -287,6 +294,7 @@ public:
         }
 
     virtual void oplusImpl(const double* update_){
+        // Call GDirection::Update()
         _estimate.Update(update_);
         updateCache();
     }
@@ -312,6 +320,9 @@ public:
     }
 
     virtual void oplusImpl(const double *update_){
+        // NOTES:
+        // scale is updated by multiplied 
+        // scale = scale * exp(delta_scale)
         setEstimate(estimate()*exp(*update_));
     }
 };
