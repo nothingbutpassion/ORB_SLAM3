@@ -168,7 +168,8 @@ public:
 
 private:
     //Sophus/Eigen migration
-    // NOTES: mRwc, mOw, mRcw, mtcw can easily got from mTcw
+    //NOTES: Used only for left camera, right camera pos can be computed by mTlr/mTrl 
+    //mRwc, mOw, mRcw, mtcw can easily got from mTcw
     Sophus::SE3<float> mTcw;
     Eigen::Matrix<float,3,3> mRwc;
     Eigen::Matrix<float,3,1> mOw;

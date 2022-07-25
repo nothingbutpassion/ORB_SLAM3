@@ -230,21 +230,21 @@ public:
     int GetWeight(KeyFrame* pKF);
 
     // Spanning tree functions
-    void AddChild(KeyFrame* pKF);
-    void EraseChild(KeyFrame* pKF);
+    void AddChild(KeyFrame* pKF);          // mspChildrens.insert(pKF);
+    void EraseChild(KeyFrame* pKF);        // mspChildrens.erase(pKF);
     void ChangeParent(KeyFrame* pKF);
-    std::set<KeyFrame*> GetChilds();
-    KeyFrame* GetParent();
+    std::set<KeyFrame*> GetChilds();       // reurn mspChildrens
+    KeyFrame* GetParent();                 // return mpParent
     bool hasChild(KeyFrame* pKF);
     void SetFirstConnection(bool bFirst);
 
     // Loop Edges
-    void AddLoopEdge(KeyFrame* pKF);
-    std::set<KeyFrame*> GetLoopEdges();
+    void AddLoopEdge(KeyFrame* pKF);       // mspLoopEdges.insert(pKF)
+    std::set<KeyFrame*> GetLoopEdges(); // return mspLoopEdges
 
     // Merge Edges
-    void AddMergeEdge(KeyFrame* pKF);
-    set<KeyFrame*> GetMergeEdges();
+    void AddMergeEdge(KeyFrame* pKF);       // mspMergeEdges.insert(pKF);
+    set<KeyFrame*> GetMergeEdges();         // return mspMergeEdges
 
     // MapPoint observation functions
     int GetNumberMPs();
@@ -293,8 +293,8 @@ public:
 
     IMU::Bias GetImuBias();
 
-    bool ProjectPointDistort(MapPoint* pMP, cv::Point2f &kp, float &u, float &v);
-    bool ProjectPointUnDistort(MapPoint* pMP, cv::Point2f &kp, float &u, float &v);
+    bool ProjectPointDistort(MapPoint* pMP, cv::Point2f &kp, float &u, float &v);    // Project a MapPoint to distorted image
+    bool ProjectPointUnDistort(MapPoint* pMP, cv::Point2f &kp, float &u, float &v);  // Project a MapPoint to undistorted image
 
     void PreSave(set<KeyFrame*>& spKF,set<MapPoint*>& spMP, set<GeometricCamera*>& spCam);
     void PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int, MapPoint*>& mpMPid, map<unsigned int, GeometricCamera*>& mpCamId);
@@ -426,7 +426,7 @@ public:
 
     // The following variables need to be accessed trough a mutex to be thread safe.
 protected:
-    // sophus poses
+    // sophus poses, Used only for left camera, right camera pos can be computed by mTlr/mTrl
     Sophus::SE3<float> mTcw;
     Eigen::Matrix3f mRcw;
     Sophus::SE3<float> mTwc;
@@ -445,7 +445,7 @@ protected:
     // Imu bias
     IMU::Bias mImuBias;
 
-    // MapPoints associated to keypoints
+    // MapPoints associated to keypoints - Important!
     std::vector<MapPoint*> mvpMapPoints;
     // For save relation without pointer, this is necessary for save/load function
     std::vector<long long int> mvBackupMapPointsId;
@@ -457,7 +457,7 @@ protected:
     // Grid over the image to speed up feature matching
     std::vector< std::vector <std::vector<size_t> > > mGrid;
 
-    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;
+    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;  // Associate with connected keyframes  - Important!
     std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
     std::vector<int> mvOrderedWeights;
     // For save relation without pointer, this is necessary for save/load function
@@ -465,10 +465,10 @@ protected:
 
     // Spanning Tree and Loop Edges
     bool mbFirstConnection;
-    KeyFrame* mpParent;
-    std::set<KeyFrame*> mspChildrens;
-    std::set<KeyFrame*> mspLoopEdges;
-    std::set<KeyFrame*> mspMergeEdges;
+    KeyFrame* mpParent;                 // Parent keyfarme - Important!
+    std::set<KeyFrame*> mspChildrens;   // Child keyframes
+    std::set<KeyFrame*> mspLoopEdges;   // Has loop edges with these keyframes
+    std::set<KeyFrame*> mspMergeEdges;  // Has merge edges with these keyframes
     // For save relation without pointer, this is necessary for save/load function
     long long int mBackupParentId;
     std::vector<long unsigned int> mvBackupChildrensId;
@@ -485,8 +485,8 @@ protected:
     Map* mpMap;
 
     // Backup variables for inertial
-    long long int mBackupPrevKFId;
-    long long int mBackupNextKFId;
+    long long int mBackupPrevKFId;          // Previouse keyframe id
+    long long int mBackupNextKFId;          // Next keyframe id
     IMU::Preintegrated mBackupImuPreintegrated;
 
     // Backup for Cameras
@@ -517,8 +517,8 @@ public:
 
     std::vector< std::vector <std::vector<size_t> > > mGridRight;
 
-    Sophus::SE3<float> GetRightPose();
-    Sophus::SE3<float> GetRightPoseInverse();
+    Sophus::SE3<float> GetRightPose();              // return mTrl * mTcw;
+    Sophus::SE3<float> GetRightPoseInverse();       // return (mTwc * mTlr).translation()
 
     Eigen::Vector3f GetRightCameraCenter();
     Eigen::Matrix<float,3,3> GetRightRotation();

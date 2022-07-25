@@ -42,6 +42,7 @@ KeyFrame::KeyFrame():
 
 }
 
+// Construct from Frame
 KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB):
     bImu(pMap->isImuInitialized()), mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
     mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
@@ -208,7 +209,7 @@ void KeyFrame::UpdateBestCovisibles()
     vPairs.reserve(mConnectedKeyFrameWeights.size());
     for(map<KeyFrame*,int>::iterator mit=mConnectedKeyFrameWeights.begin(), mend=mConnectedKeyFrameWeights.end(); mit!=mend; mit++)
        vPairs.push_back(make_pair(mit->second,mit->first));
-
+    // HOw to sort vector<pair<int,KeyFrame*>>, use weight?
     sort(vPairs.begin(),vPairs.end());
     list<KeyFrame*> lKFs;
     list<int> lWs;
@@ -250,6 +251,7 @@ vector<KeyFrame*> KeyFrame::GetBestCovisibilityKeyFrames(const int &N)
 
 }
 
+// Get covisiable keyframes that has weight >= w
 vector<KeyFrame*> KeyFrame::GetCovisiblesByWeight(const int &w)
 {
     unique_lock<mutex> lock(mMutexConnections);
@@ -445,7 +447,7 @@ void KeyFrame::UpdateConnections(bool upParent)
         vPairs.push_back(make_pair(nmax,pKFmax));
         pKFmax->AddConnection(this,nmax);
     }
-
+    // Sort with weight
     sort(vPairs.begin(),vPairs.end());
     list<KeyFrame*> lKFs;
     list<int> lWs;
@@ -465,6 +467,7 @@ void KeyFrame::UpdateConnections(bool upParent)
 
         if(mbFirstConnection && mnId!=mpMap->GetInitKFid())
         {
+            // Parent is the keyframe with max weight
             mpParent = mvpOrderedConnectedKeyFrames.front();
             mpParent->AddChild(this);
             mbFirstConnection = false;
@@ -585,11 +588,13 @@ void KeyFrame::SetBadFlag()
         }
     }
 
+    // Other keyframe remove the connection with this keyframe
     for(map<KeyFrame*,int>::iterator mit = mConnectedKeyFrameWeights.begin(), mend=mConnectedKeyFrameWeights.end(); mit!=mend; mit++)
     {
         mit->first->EraseConnection(this);
     }
 
+    // Erase the map points observed by this keyframe 
     for(size_t i=0; i<mvpMapPoints.size(); i++)
     {
         if(mvpMapPoints[i])
@@ -610,6 +615,7 @@ void KeyFrame::SetBadFlag()
         if(mpParent)
             sParentCandidates.insert(mpParent);
 
+        // Reparents for all children, because this keyframe is bad (will be removed)
         // Assign at each iteration one children with a parent (the pair with highest covisibility weight)
         // Include that children as new parent candidate for the rest
         while(!mspChildrens.empty())
@@ -667,14 +673,18 @@ void KeyFrame::SetBadFlag()
         }
 
         if(mpParent){
+            // Parent has not this keyframe as child
             mpParent->EraseChild(this);
+            // compute tansform from parent to this keyframe
             mTcp = mTcw * mpParent->GetPoseInverse();
         }
+        // Set bad flag
         mbBad = true;
     }
 
-
+    // Remove this keyframe from map
     mpMap->EraseKeyFrame(this);
+    // Remove this keyframe from keyframe database
     mpKeyFrameDB->erase(this);
 }
 
@@ -700,7 +710,7 @@ void KeyFrame::EraseConnection(KeyFrame* pKF)
         UpdateBestCovisibles();
 }
 
-
+// Get feature indices for specified area
 vector<size_t> KeyFrame::GetFeaturesInArea(const float &x, const float &y, const float &r, const bool bRight) const
 {
     vector<size_t> vIndices;
@@ -752,6 +762,7 @@ bool KeyFrame::IsInImage(const float &x, const float &y) const
     return (x>=mnMinX && x<mnMaxX && y>=mnMinY && y<mnMaxY);
 }
 
+// Get 3D point by using depth, u,v
 bool KeyFrame::UnprojectStereo(int i, Eigen::Vector3f &x3D)
 {
     const float z = mvDepth[i];
@@ -800,7 +811,7 @@ float KeyFrame::ComputeSceneMedianDepth(const int q)
             vDepths.push_back(z);
         }
     }
-
+    // Sort depths of all map points
     sort(vDepths.begin(),vDepths.end());
 
     return vDepths[(vDepths.size()-1)/q];
