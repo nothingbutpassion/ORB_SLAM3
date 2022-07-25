@@ -102,6 +102,7 @@ public:
     // and fill variables of the MapPoint to be used by the tracking
     bool isInFrustum(MapPoint* pMP, float viewingCosLimit);
 
+    // Project a MapPoint to get image point kp = (u, v), where kp is distorted with k1,k2,k3,p1,p2 
     bool ProjectPointDistort(MapPoint* pMP, cv::Point2f &kp, float &u, float &v);
 
     Eigen::Vector3f inRefCoordinates(Eigen::Vector3f pCw);
@@ -109,6 +110,7 @@ public:
     // Compute the cell of a keypoint (return false if outside the grid)
     bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
 
+    // Get the feature indices within specified area: (x, y, r, minLevel, maxLevel)
     vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r, const int minLevel=-1, const int maxLevel=-1, const bool bRight = false) const;
 
     // Search a match for each keypoint in the left image to a keypoint in the right image.
@@ -166,6 +168,7 @@ public:
 
 private:
     //Sophus/Eigen migration
+    // NOTES: mRwc, mOw, mRcw, mtcw can easily got from mTcw
     Sophus::SE3<float> mTcw;
     Eigen::Matrix<float,3,3> mRwc;
     Eigen::Matrix<float,3,1> mOw;
@@ -229,6 +232,7 @@ public:
     std::vector<cv::KeyPoint> mvKeysUn;
 
     // Corresponding stereo coordinate and depth for each keypoint.
+    // NOTES: associated with MapPpint
     std::vector<MapPoint*> mvpMapPoints;
     // "Monocular" keypoints have a negative value.
     std::vector<float> mvuRight;
@@ -323,14 +327,16 @@ private:
     std::mutex *mpMutexImu;
 
 public:
+    // Left & right camera
     GeometricCamera* mpCamera, *mpCamera2;
 
-    //Number of KeyPoints extracted in the left and right images
+    //Number of KeyPoints extracted in the left and right images, Only used in stereo case, set as -1 for mono/RGB-D cases
     int Nleft, Nright;
-    //Number of Non Lapping Keypoints
+    //Number of Non Lapping Keypoints, Only used in stereo case
     int monoLeft, monoRight;
 
     //For stereo matching
+    // Only used in stereo case, computed by ComputeStereoFishEyeMatches()
     std::vector<int> mvLeftToRightMatch, mvRightToLeftMatch;
 
     //For stereo fisheye matching

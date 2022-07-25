@@ -100,10 +100,10 @@ public:
     void SetStoredMap();
 
     bool HasThumbnail();
-    bool IsInUse();
+    bool IsInUse();             // return mIsInUse;
 
-    void SetBad();
-    bool IsBad();
+    void SetBad();              // mbBad = true
+    bool IsBad();               // return mbBad
 
     void clear();
 
@@ -166,8 +166,8 @@ protected:
     std::vector<MapPoint*> mvpBackupMapPoints;
     std::vector<KeyFrame*> mvpBackupKeyFrames;
 
-    KeyFrame* mpKFinitial;
-    KeyFrame* mpKFlowerID;
+    KeyFrame* mpKFinitial;  // Initail keyframe
+    KeyFrame* mpKFlowerID;  // The keyframe with minimum id
 
     unsigned long int mnBackupKFinitialID;
     unsigned long int mnBackupKFlowerID;
@@ -179,8 +179,8 @@ protected:
     int mnMapChange;
     int mnMapChangeNotified;
 
-    long unsigned int mnInitKFid;
-    long unsigned int mnMaxKFid;
+    long unsigned int mnInitKFid;    // Initial keyframe id
+    long unsigned int mnMaxKFid;     // Maximum id of all inserted keyframes
     //long unsigned int mnLastLoopKFid;
 
     // Index related to a big change in the map (loop closure, global BA)

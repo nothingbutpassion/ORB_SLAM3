@@ -152,8 +152,8 @@ public:
     int PredictScale(const float &currentDist, KeyFrame*pKF);
     int PredictScale(const float &currentDist, Frame* pF);
 
-    Map* GetMap();
-    void UpdateMap(Map* pMap);
+    Map* GetMap();                  // return mpMap
+    void UpdateMap(Map* pMap);      // Set mpMap = pMap;
 
     void PrintObservations();
 
@@ -213,7 +213,10 @@ protected:
      Eigen::Vector3f mWorldPos;
 
      // Keyframes observing the point and associated index in keyframe
+     // NOTES: This is the association with Keyframe
+     //        The tuple is <index-in-left-image, index-in-right-image>
      std::map<KeyFrame*,std::tuple<int,int> > mObservations;
+     
      // For save relation without pointer, this is necessary for save/load function
      std::map<long unsigned int, int> mBackupObservationsId1;
      std::map<long unsigned int, int> mBackupObservationsId2;

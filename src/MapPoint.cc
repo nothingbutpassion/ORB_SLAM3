@@ -43,6 +43,7 @@ MapPoint::MapPoint(const Eigen::Vector3f &Pos, KeyFrame *pRefKF, Map* pMap):
     mpReplaced(static_cast<MapPoint*>(NULL)), mfMinDistance(0), mfMaxDistance(0), mpMap(pMap),
     mnOriginMapId(pMap->GetId())
 {
+    // Construct from given 3d points & keyframe
     SetWorldPos(Pos);
 
     mNormalVector.setZero();
@@ -62,6 +63,7 @@ MapPoint::MapPoint(const double invDepth, cv::Point2f uv_init, KeyFrame* pRefKF,
     mpReplaced(static_cast<MapPoint*>(NULL)), mfMinDistance(0), mfMaxDistance(0), mpMap(pMap),
     mnOriginMapId(pMap->GetId())
 {
+    // Construct from 2d point & inverse-depth & host keyframe
     mInvDepth=invDepth;
     mInitU=(double)uv_init.x;
     mInitV=(double)uv_init.y;
@@ -81,19 +83,25 @@ MapPoint::MapPoint(const Eigen::Vector3f &Pos, Map* pMap, Frame* pFrame, const i
     mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame*>(NULL)), mnVisible(1),
     mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap), mnOriginMapId(pMap->GetId())
 {
+    // Construct from 3d point & frame
     SetWorldPos(Pos);
 
     Eigen::Vector3f Ow;
     if(pFrame -> Nleft == -1 || idxF < pFrame -> Nleft){
+        // This map point is observed by left image frame
+        // Ow is left camera center
         Ow = pFrame->GetCameraCenter();
     }
     else{
+        // This map point is observed by left image frame
+        // NOTES: Ow is still left camera center
         Eigen::Matrix3f Rwl = pFrame->GetRwc();
         Eigen::Vector3f tlr = pFrame->GetRelativePoseTlr().translation();
         Eigen::Vector3f twl = pFrame->GetOw();
-
+        
         Ow = Rwl * tlr + twl;
     }
+    // Compute the norm vector: left camera center -> this map point
     mNormalVector = mWorldPos - Ow;
     mNormalVector = mNormalVector / mNormalVector.norm();
 
@@ -104,7 +112,7 @@ MapPoint::MapPoint(const Eigen::Vector3f &Pos, Map* pMap, Frame* pFrame, const i
                                                                          : pFrame -> mvKeysRight[idxF].octave;
     const float levelScaleFactor =  pFrame->mvScaleFactors[level];
     const int nLevels = pFrame->mnScaleLevels;
-
+    // Compute the max & min distance observed by the frame 
     mfMaxDistance = dist*levelScaleFactor;
     mfMinDistance = mfMaxDistance/pFrame->mvScaleFactors[nLevels-1];
 
@@ -245,6 +253,7 @@ MapPoint* MapPoint::GetReplaced()
     return mpReplaced;
 }
 
+// Replace this map point with the given one
 void MapPoint::Replace(MapPoint* pMP)
 {
     if(pMP->mnId==this->mnId)
@@ -326,6 +335,8 @@ float MapPoint::GetFoundRatio()
     return static_cast<float>(mnFound)/mnVisible;
 }
 
+// Compute the best descriptor for this map point
+// It's the descriptor with least median distance to the rest
 void MapPoint::ComputeDistinctiveDescriptors()
 {
     // Retrieve all observed descriptors
@@ -486,6 +497,9 @@ void MapPoint::UpdateNormalAndDepth()
     const int nLevels = pRefKF->mnScaleLevels;
 
     {
+        // NOTES:
+        // mfMaxDistance, mfMinDistance is computed only by the reference keyframe
+        // mNormalVector is the average normal vector computed by all observations
         unique_lock<mutex> lock3(mMutexPos);
         mfMaxDistance = dist*levelScaleFactor;
         mfMinDistance = mfMaxDistance/pRefKF->mvScaleFactors[nLevels-1];
@@ -528,6 +542,7 @@ int MapPoint::PredictScale(const float &currentDist, KeyFrame* pKF)
     return nScale;
 }
 
+// Predict scale by compare mfMaxDistance with currentDist
 int MapPoint::PredictScale(const float &currentDist, Frame* pF)
 {
     float ratio;
@@ -569,6 +584,7 @@ void MapPoint::UpdateMap(Map* pMap)
     mpMap = pMap;
 }
 
+// Save/backup these data that must in given keyfarmes/map-points
 void MapPoint::PreSave(set<KeyFrame*>& spKF,set<MapPoint*>& spMP)
 {
     mBackupReplacedId = -1;
@@ -599,6 +615,7 @@ void MapPoint::PreSave(set<KeyFrame*>& spKF,set<MapPoint*>& spMP)
     }
 }
 
+// Corresponding to PreSave, do opposite operatilons
 void MapPoint::PostLoad(map<long unsigned int, KeyFrame*>& mpKFid, map<long unsigned int, MapPoint*>& mpMPid)
 {
     mpRefKF = mpKFid[mBackupRefKFId];

@@ -320,6 +320,7 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
     if(mvKeys.empty())
         return;
 
+    // Compute undistorted keypoints mvKeysUn from mvKeys
     UndistortKeyPoints();
 
     // Set no stereo information
@@ -337,6 +338,7 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
     // This is done only for the first Frame (or after a change in the calibration)
     if(mbInitialComputations)
     {
+        // Compute the bounds: mnMinX, mnMaxX, mnMinY, mnMinX
         ComputeImageBounds(imGray);
 
         mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
@@ -585,6 +587,7 @@ bool Frame::isInFrustum(MapPoint *pMP, float viewingCosLimit)
     }
 }
 
+// Project map point to get image point kp = (u, v), where kp is the distorted in mono camera case! 
 bool Frame::ProjectPointDistort(MapPoint* pMP, cv::Point2f &kp, float &u, float &v)
 {
 
@@ -654,6 +657,7 @@ Eigen::Vector3f Frame::inRefCoordinates(Eigen::Vector3f pCw)
     return mRcw * pCw + mtcw;
 }
 
+// Get feature indices in specified area: (x, y, r, minLevel, maxLevel)
 vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const float  &r, const int minLevel, const int maxLevel, const bool bRight) const
 {
     vector<size_t> vIndices;
@@ -734,7 +738,7 @@ bool Frame::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY)
     return true;
 }
 
-
+// Compute mBowVec, mFeatVec from mDescriptors
 void Frame::ComputeBoW()
 {
     if(mBowVec.empty())
@@ -808,6 +812,7 @@ void Frame::ComputeImageBounds(const cv::Mat &imLeft)
     }
 }
 
+// Compute/get mvDepth & mvuRight by stere match
 void Frame::ComputeStereoMatches()
 {
     mvuRight = vector<float>(N,-1.0f);
@@ -980,7 +985,7 @@ void Frame::ComputeStereoMatches()
     }
 }
 
-
+// Compute mvDepth & mvuRight
 void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
 {
     mvuRight = vector<float>(N,-1);

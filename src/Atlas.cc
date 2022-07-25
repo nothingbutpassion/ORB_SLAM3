@@ -63,7 +63,7 @@ void Atlas::CreateNewMap()
         if(!mspMaps.empty() && mnLastInitKFidMap < mpCurrentMap->GetMaxKFid())
             mnLastInitKFidMap = mpCurrentMap->GetMaxKFid()+1; //The init KF is the next of current maximum
 
-        mpCurrentMap->SetStoredMap();
+        mpCurrentMap->SetStoredMap();   // Set mpCurrentMap->mIsInUse = false;
         cout << "Stored map with ID: " << mpCurrentMap->GetId() << endl;
 
         //if(mHasViewer)
@@ -72,7 +72,7 @@ void Atlas::CreateNewMap()
     cout << "Creation of new map with last KF id: " << mnLastInitKFidMap << endl;
 
     mpCurrentMap = new Map(mnLastInitKFidMap);
-    mpCurrentMap->SetCurrentMap();
+    mpCurrentMap->SetCurrentMap();  //  Set mpCurrentMap->mIsInUse = true;
     mspMaps.insert(mpCurrentMap);
 }
 
