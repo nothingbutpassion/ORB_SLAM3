@@ -70,7 +70,7 @@ void Atlas::CreateNewMap()
         //    mpViewer->AddMapToCreateThumbnail(mpCurrentMap);
     }
     cout << "Creation of new map with last KF id: " << mnLastInitKFidMap << endl;
-
+    // Current map point to the new crated Map
     mpCurrentMap = new Map(mnLastInitKFidMap);
     mpCurrentMap->SetCurrentMap();  //  Set mpCurrentMap->mIsInUse = true;
     mspMaps.insert(mpCurrentMap);

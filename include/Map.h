@@ -69,37 +69,37 @@ class Map
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    Map();
-    Map(int initKFid);
+    Map();                 // Construct an empty map
+    Map(int initKFid);     // Construct with initial KF id —— set mnInitKFid = initKFid, mnMaxKFid = initKFid
     ~Map();
 
-    void AddKeyFrame(KeyFrame* pKF);
-    void AddMapPoint(MapPoint* pMP);
-    void EraseMapPoint(MapPoint* pMP);
-    void EraseKeyFrame(KeyFrame* pKF);
-    void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
-    void InformNewBigChange();
-    int GetLastBigChangeIdx();
+    void AddKeyFrame(KeyFrame* pKF);        // mspKeyFrames.insert(pKF)
+    void AddMapPoint(MapPoint* pMP);        // mspMapPoints.insert(pMP)
+    void EraseMapPoint(MapPoint* pMP);      // mspMapPoints.erase(pMP);
+    void EraseKeyFrame(KeyFrame* pKF);      // mspKeyFrames.erase(pKF);
+    void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs); //  mvpReferenceMapPoints = vpMPs;
+    void InformNewBigChange();              // mnBigChangeIdx++
+    int GetLastBigChangeIdx();              // return mnBigChangeIdx
 
-    std::vector<KeyFrame*> GetAllKeyFrames();
-    std::vector<MapPoint*> GetAllMapPoints();
-    std::vector<MapPoint*> GetReferenceMapPoints();
+    std::vector<KeyFrame*> GetAllKeyFrames();               // return mspKeyFrames 
+    std::vector<MapPoint*> GetAllMapPoints();               // return mspMapPoints
+    std::vector<MapPoint*> GetReferenceMapPoints();         // mvpReferenceMapPoints
 
-    long unsigned int MapPointsInMap();
-    long unsigned  KeyFramesInMap();
+    long unsigned int MapPointsInMap();                     // return mspMapPoints.size()
+    long unsigned  KeyFramesInMap();                        // return mspKeyFrames.size()
 
-    long unsigned int GetId();
+    long unsigned int GetId();                              // return mnId;
 
-    long unsigned int GetInitKFid();
-    void SetInitKFid(long unsigned int initKFif);
-    long unsigned int GetMaxKFid();
+    long unsigned int GetInitKFid();                        // mnInitKFid
+    void SetInitKFid(long unsigned int initKFif);           // mnInitKFid = initKFif;
+    long unsigned int GetMaxKFid();                         // return mnMaxKFid
 
-    KeyFrame* GetOriginKF();
+    KeyFrame* GetOriginKF();    // mpKFinitial
 
-    void SetCurrentMap();
-    void SetStoredMap();
+    void SetCurrentMap();       // mIsInUse = true;
+    void SetStoredMap();        // mIsInUse = false;
 
-    bool HasThumbnail();
+    bool HasThumbnail();        // Cann't find the implementaion !
     bool IsInUse();             // return mIsInUse;
 
     void SetBad();              // mbBad = true
@@ -107,14 +107,15 @@ public:
 
     void clear();
 
-    int GetMapChangeIndex();
-    void IncreaseChangeIndex();
-    int GetLastMapChange();
-    void SetLastMapChange(int currentChangeId);
+    int GetMapChangeIndex();                         // return mnMapChange;
+    void IncreaseChangeIndex();                      // mnMapChange++
+    int GetLastMapChange();                          // return mnMapChangeNotified;
+    void SetLastMapChange(int currentChangeId);      // mnMapChangeNotified = currentChangeId;
 
     void SetImuInitialized();
     bool isImuInitialized();
 
+    // Set body (IMU) coord of first keyframe is as the world coord, its position is (0, 0, 0)
     void ApplyScaledRotation(const Sophus::SE3f &T, const float s, const bool bScaledVel=false);
 
     void SetInertialSensor();
@@ -133,6 +134,7 @@ public:
     void PreSave(std::set<GeometricCamera*> &spCams);
     void PostLoad(KeyFrameDatabase* pKFDB, ORBVocabulary* pORBVoc/*, map<long unsigned int, KeyFrame*>& mpKeyFrameId*/, map<unsigned int, GeometricCamera*> &mpCams);
 
+    // Where is the implementation of this function ?
     void printReprojectionError(list<KeyFrame*> &lpLocalWindowKFs, KeyFrame* mpCurrentKF, string &name, string &name_folder);
 
     vector<KeyFrame*> mvpKeyFrameOrigins;
@@ -159,8 +161,8 @@ protected:
 
     long unsigned int mnId;
 
-    std::set<MapPoint*> mspMapPoints;
-    std::set<KeyFrame*> mspKeyFrames;
+    std::set<MapPoint*> mspMapPoints;   // All MapPoints in this map - Important!
+    std::set<KeyFrame*> mspKeyFrames;   // All KeyFrames in this map - Important!
 
     // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
     std::vector<MapPoint*> mvpBackupMapPoints;

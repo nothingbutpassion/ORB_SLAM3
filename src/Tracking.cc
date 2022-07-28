@@ -1649,6 +1649,7 @@ void Tracking::PreintegrateIMU()
             {
                 IMU::Point* m = &mlQueueImuData.front();
                 cout.precision(17);
+                // IMU timestamp shouldn't be less than previous image timestamp 
                 if(m->t<mCurrentFrame.mpPrevFrame->mTimeStamp-mImuPer)
                 {
                     mlQueueImuData.pop_front();
@@ -1680,6 +1681,7 @@ void Tracking::PreintegrateIMU()
         return;
     }
 
+    // Create a Preintegrated with bias of last Frame, noise of current Frame
     IMU::Preintegrated* pImuPreintegratedFromLastFrame = new IMU::Preintegrated(mLastFrame.mImuBias,mCurrentFrame.mImuCalib);
 
     for(int i=0; i<n; i++)
@@ -1688,6 +1690,7 @@ void Tracking::PreintegrateIMU()
         Eigen::Vector3f acc, angVel;
         if((i==0) && (i<(n-1)))
         {
+            // For First IMU point
             float tab = mvImuFromLastFrame[i+1].t-mvImuFromLastFrame[i].t;
             float tini = mvImuFromLastFrame[i].t-mCurrentFrame.mpPrevFrame->mTimeStamp;
             acc = (mvImuFromLastFrame[i].a+mvImuFromLastFrame[i+1].a-
@@ -1704,6 +1707,7 @@ void Tracking::PreintegrateIMU()
         }
         else if((i>0) && (i==(n-1)))
         {
+            // For last IMU point
             float tab = mvImuFromLastFrame[i+1].t-mvImuFromLastFrame[i].t;
             float tend = mvImuFromLastFrame[i+1].t-mCurrentFrame.mTimeStamp;
             acc = (mvImuFromLastFrame[i].a+mvImuFromLastFrame[i+1].a-
@@ -1714,6 +1718,7 @@ void Tracking::PreintegrateIMU()
         }
         else if((i==0) && (i==(n-1)))
         {
+            // Case: i=0, n=1, exactly 2 IMU opints
             acc = mvImuFromLastFrame[i].a;
             angVel = mvImuFromLastFrame[i].w;
             tstep = mCurrentFrame.mTimeStamp-mCurrentFrame.mpPrevFrame->mTimeStamp;
@@ -1721,6 +1726,7 @@ void Tracking::PreintegrateIMU()
 
         if (!mpImuPreintegratedFromLastKF)
             cout << "mpImuPreintegratedFromLastKF does not exist" << endl;
+        // NOTES: It's dangerous if mpImuPreintegratedFromLastKF is null
         mpImuPreintegratedFromLastKF->IntegrateNewMeasurement(acc,angVel,tstep);
         pImuPreintegratedFromLastFrame->IntegrateNewMeasurement(acc,angVel,tstep);
     }

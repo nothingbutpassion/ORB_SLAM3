@@ -248,7 +248,11 @@ bool Map::IsBad()
     return mbBad;
 }
 
-
+// NOTES:
+// Body position (IMU) of first keyframe is fixed to (0,0,0)
+// Set body (IMU) coord of first keyframe is as the world coord
+// T is Tbw, it's orignal transform from world to body
+// s is scale got from IMU initializaton 
 void Map::ApplyScaledRotation(const Sophus::SE3f &T, const float s, const bool bScaledVel)
 {
     unique_lock<mutex> lock(mMutexMap);

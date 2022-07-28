@@ -135,18 +135,18 @@ public:
     void SetORBVocabulary(ORBVocabulary* pORBVoc);
     ORBVocabulary* GetORBVocabulary();
 
-    long unsigned int GetNumLivedKF();
+    long unsigned int GetNumLivedKF();      // return all Keyframes nums in all Maps
 
-    long unsigned int GetNumLivedMP();
+    long unsigned int GetNumLivedMP();      // return all MapPoints in all Maps
 
 protected:
 
-    std::set<Map*> mspMaps;
-    std::set<Map*> mspBadMaps;
+    std::set<Map*> mspMaps;         // Atlas contains N Maps, Important!
+    std::set<Map*> mspBadMaps;      // The bad Maps
     // Its necessary change the container from set to vector because libboost 1.58 and Ubuntu 16.04 have an error with this cointainer
     std::vector<Map*> mvpBackupMaps;
 
-    Map* mpCurrentMap;
+    Map* mpCurrentMap;              // Current Map, Important!
 
     std::vector<GeometricCamera*> mvpCameras;
 
