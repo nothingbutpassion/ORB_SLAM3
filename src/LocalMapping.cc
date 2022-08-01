@@ -1188,7 +1188,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         nMinKF = 10;
     }
 
-
+    // Don't do IMU initialization if there's no enough KeyFrames (< 10) 
     if(mpAtlas->KeyFramesInMap()<nMinKF)
         return;
 

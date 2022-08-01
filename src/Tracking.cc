@@ -1623,7 +1623,7 @@ void Tracking::GrabImuData(const IMU::Point &imuMeasurement)
 
 void Tracking::PreintegrateIMU()
 {
-
+    // Preingegration shouldn't be used for first frame
     if(!mCurrentFrame.mpPrevFrame)
     {
         Verbose::PrintMess("non prev frame ", Verbose::VERBOSITY_NORMAL);
@@ -1691,6 +1691,8 @@ void Tracking::PreintegrateIMU()
         if((i==0) && (i<(n-1)))
         {
             // For First IMU point
+            // imu--------imu_0--------imu--------imu--------imu--------imu_n-1--------imu_n
+            // ------pre---------------------------------------------------------cur--------
             float tab = mvImuFromLastFrame[i+1].t-mvImuFromLastFrame[i].t;
             float tini = mvImuFromLastFrame[i].t-mCurrentFrame.mpPrevFrame->mTimeStamp;
             acc = (mvImuFromLastFrame[i].a+mvImuFromLastFrame[i+1].a-
@@ -1708,6 +1710,8 @@ void Tracking::PreintegrateIMU()
         else if((i>0) && (i==(n-1)))
         {
             // For last IMU point
+            // imu--------imu_0--------imu--------imu--------imu--------imu_n-1--------imu_n
+            // ------pre---------------------------------------------------------cur--------
             float tab = mvImuFromLastFrame[i+1].t-mvImuFromLastFrame[i].t;
             float tend = mvImuFromLastFrame[i+1].t-mCurrentFrame.mTimeStamp;
             acc = (mvImuFromLastFrame[i].a+mvImuFromLastFrame[i+1].a-
@@ -1727,13 +1731,13 @@ void Tracking::PreintegrateIMU()
         if (!mpImuPreintegratedFromLastKF)
             cout << "mpImuPreintegratedFromLastKF does not exist" << endl;
         // NOTES: It's dangerous if mpImuPreintegratedFromLastKF is null
-        mpImuPreintegratedFromLastKF->IntegrateNewMeasurement(acc,angVel,tstep);
-        pImuPreintegratedFromLastFrame->IntegrateNewMeasurement(acc,angVel,tstep);
+        mpImuPreintegratedFromLastKF->IntegrateNewMeasurement(acc,angVel,tstep);    // Preintegrated since last KF
+        pImuPreintegratedFromLastFrame->IntegrateNewMeasurement(acc,angVel,tstep);  // Preintegrated for current Frame
     }
 
-    mCurrentFrame.mpImuPreintegratedFrame = pImuPreintegratedFromLastFrame;
-    mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
-    mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
+    mCurrentFrame.mpImuPreintegratedFrame = pImuPreintegratedFromLastFrame; // Current Preinterated 
+    mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;        // Preintegrated since last KF
+    mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;                          // Save last KF                         
 
     mCurrentFrame.setIntegrated();
 
@@ -1865,6 +1869,9 @@ void Tracking::Track()
     if ((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && mpLastKeyFrame)
         mCurrentFrame.SetNewBias(mpLastKeyFrame->GetImuBias());
 
+    // NOTES:
+    // mState is set as NO_IMAGES_YET in constructor of Tracking
+    // Here, image is got, so set as NOT_INITIALIZED
     if(mState==NO_IMAGES_YET)
     {
         mState = NOT_INITIALIZED;
@@ -1910,6 +1917,8 @@ void Tracking::Track()
         }
         else
         {
+            // Mono initialization with only vision method, 
+            // mState=OK if initialization succeed
             MonocularInitialization();
         }
 
@@ -1923,6 +1932,7 @@ void Tracking::Track()
 
         if(mpAtlas->GetAllMaps().size() == 1)
         {
+            // Only one Map, first Frame id is current Frame id
             mnFirstFrameId = mCurrentFrame.mnId;
         }
     }
@@ -2457,6 +2467,7 @@ void Tracking::MonocularInitialization()
     if(!mbReadyToInitializate)
     {
         // Set Reference Frame
+        // Initial condition: initial Frame must have enough features (> 100)
         if(mCurrentFrame.mvKeys.size()>100)
         {
 
@@ -2466,14 +2477,17 @@ void Tracking::MonocularInitialization()
             for(size_t i=0; i<mCurrentFrame.mvKeysUn.size(); i++)
                 mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;
 
+            // Initial Match is filled with -1
             fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
 
             if (mSensor == System::IMU_MONOCULAR)
             {
+                // Delete previous Preintegrated object, because this is an initial frame.
                 if(mpImuPreintegratedFromLastKF)
                 {
                     delete mpImuPreintegratedFromLastKF;
                 }
+                // Create Preintegrated object for the initial frame
                 mpImuPreintegratedFromLastKF = new IMU::Preintegrated(IMU::Bias(),*mpImuCalib);
                 mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
 
@@ -2497,6 +2511,7 @@ void Tracking::MonocularInitialization()
         ORBmatcher matcher(0.9,true);
         int nmatches = matcher.SearchForInitialization(mInitialFrame,mCurrentFrame,mvbPrevMatched,mvIniMatches,100);
 
+        // Initial condition: Each frame must have enough matches with initial frame (>= 100)
         // Check if there are enough correspondences
         if(nmatches<100)
         {
@@ -2506,7 +2521,7 @@ void Tracking::MonocularInitialization()
 
         Sophus::SE3f Tcw;
         vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
-
+        // If reconstruct failed, we would try the following Frame 
         if(mpCamera->ReconstructWithTwoViews(mInitialFrame.mvKeysUn,mCurrentFrame.mvKeysUn,mvIniMatches,Tcw,mvIniP3D,vbTriangulated))
         {
             for(size_t i=0, iend=mvIniMatches.size(); i<iend;i++)
@@ -2519,8 +2534,8 @@ void Tracking::MonocularInitialization()
             }
 
             // Set Frame Poses
-            mInitialFrame.SetPose(Sophus::SE3f());
-            mCurrentFrame.SetPose(Tcw);
+            mInitialFrame.SetPose(Sophus::SE3f());  // Initial frame as the world frame
+            mCurrentFrame.SetPose(Tcw);             // Current frame pose: Transform from world to (first) camera
 
             CreateInitialMapMonocular();
         }
@@ -2532,13 +2547,15 @@ void Tracking::MonocularInitialization()
 void Tracking::CreateInitialMapMonocular()
 {
     // Create KeyFrames
+    // Here create KeyFrames from initial & current Frames
     KeyFrame* pKFini = new KeyFrame(mInitialFrame,mpAtlas->GetCurrentMap(),mpKeyFrameDB);
     KeyFrame* pKFcur = new KeyFrame(mCurrentFrame,mpAtlas->GetCurrentMap(),mpKeyFrameDB);
 
+    // The initial KeyFrame's Preintegrated object is set as NULL
     if(mSensor == System::IMU_MONOCULAR)
         pKFini->mpImuPreintegrated = (IMU::Preintegrated*)(NULL);
 
-
+    // Compute Bag of Word for initial & current KeyFrames
     pKFini->ComputeBoW();
     pKFcur->ComputeBoW();
 
@@ -2554,6 +2571,8 @@ void Tracking::CreateInitialMapMonocular()
         //Create MapPoint.
         Eigen::Vector3f worldPos;
         worldPos << mvIniP3D[i].x, mvIniP3D[i].y, mvIniP3D[i].z;
+        // NOTES: It's current KeyFrame that set as the Reference KeyFrame of the MapPoint
+        //        It's not initial KeyFrame as the Reference KeyFrame, why?
         MapPoint* pMP = new MapPoint(worldPos,pKFcur,mpAtlas->GetCurrentMap());
 
         pKFini->AddMapPoint(pMP,i);
@@ -2583,15 +2602,17 @@ void Tracking::CreateInitialMapMonocular()
 
     // Bundle Adjustment
     Verbose::PrintMess("New Map created with " + to_string(mpAtlas->MapPointsInMap()) + " points", Verbose::VERBOSITY_QUIET);
-    Optimizer::GlobalBundleAdjustemnt(mpAtlas->GetCurrentMap(),20);
 
+    // Here, current map has 2 KeyFrames + N MapPoints
+    Optimizer::GlobalBundleAdjustemnt(mpAtlas->GetCurrentMap(),20);
+    // Compute media depth (Z value)  of MapPoints observed by Initial KeyFrame
     float medianDepth = pKFini->ComputeSceneMedianDepth(2);
     float invMedianDepth;
     if(mSensor == System::IMU_MONOCULAR)
         invMedianDepth = 4.0f/medianDepth; // 4.0f
     else
         invMedianDepth = 1.0f/medianDepth;
-
+    // Initialize conditon: if tracked MapPoints is not enough (< 50), init faliled
     if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<50) // TODO Check, originally 100 tracks
     {
         Verbose::PrintMess("Wrong initialization, reseting...", Verbose::VERBOSITY_QUIET);
@@ -2601,8 +2622,8 @@ void Tracking::CreateInitialMapMonocular()
 
     // Scale initial baseline
     Sophus::SE3f Tc2w = pKFcur->GetPose();
-    Tc2w.translation() *= invMedianDepth;
-    pKFcur->SetPose(Tc2w);
+    Tc2w.translation() *= invMedianDepth;   // Change current KeyFrame's translation (rotation is not changed)
+    pKFcur->SetPose(Tc2w);                  // Update current KeyFrame pose
 
     // Scale points
     vector<MapPoint*> vpAllMapPoints = pKFini->GetMapPointMatches();
@@ -2621,27 +2642,29 @@ void Tracking::CreateInitialMapMonocular()
         pKFcur->mPrevKF = pKFini;
         pKFini->mNextKF = pKFcur;
         pKFcur->mpImuPreintegrated = mpImuPreintegratedFromLastKF;
-
+        // Create a new Preintegrated object for preintegration since the current KeyFrame
         mpImuPreintegratedFromLastKF = new IMU::Preintegrated(pKFcur->mpImuPreintegrated->GetUpdatedBias(),pKFcur->mImuCalib);
     }
 
-
+    // Add initial & current KeyFrame to LocalMapping
     mpLocalMapper->InsertKeyFrame(pKFini);
     mpLocalMapper->InsertKeyFrame(pKFcur);
     mpLocalMapper->mFirstTs=pKFcur->mTimeStamp;
 
+    // Update current Frame pose
     mCurrentFrame.SetPose(pKFcur->GetPose());
     mnLastKeyFrameId=mCurrentFrame.mnId;
     mpLastKeyFrame = pKFcur;
     //mnLastRelocFrameId = mInitialFrame.mnId;
 
+    // Add initial & current KeyFrame to Local KeyFrames
     mvpLocalKeyFrames.push_back(pKFcur);
     mvpLocalKeyFrames.push_back(pKFini);
     mvpLocalMapPoints=mpAtlas->GetAllMapPoints();
-    mpReferenceKF = pKFcur;
-    mCurrentFrame.mpReferenceKF = pKFcur;
+    mpReferenceKF = pKFcur;                 // The Reference KF point to Current KeyFrame
+    mCurrentFrame.mpReferenceKF = pKFcur;   
 
-    // Compute here initial velocity
+    // Compute here initial velocity, --- Never used !
     vector<KeyFrame*> vKFs = mpAtlas->GetAllKeyFrames();
 
     Sophus::SE3f deltaT = vKFs.back()->GetPose() * vKFs.front()->GetPoseInverse();
@@ -2656,11 +2679,11 @@ void Tracking::CreateInitialMapMonocular()
     mpAtlas->SetReferenceMapPoints(mvpLocalMapPoints);
 
     mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
-
+    // Set initial KeyFrame as the origin KeyFrames
     mpAtlas->GetCurrentMap()->mvpKeyFrameOrigins.push_back(pKFini);
 
     mState=OK;
-
+    // Init id is current KeyFrame id
     initID = pKFcur->mnId;
 }
 
@@ -2769,8 +2792,8 @@ bool Tracking::TrackReferenceKeyFrame()
                 else{
                     pMP->mbTrackInViewR = false;
                 }
-                pMP->mbTrackInView = false;
-                pMP->mnLastFrameSeen = mCurrentFrame.mnId;
+                pMP->mbTrackInView = false;                 // Outlier MapPoint is not tracked
+                pMP->mnLastFrameSeen = mCurrentFrame.mnId;  // Save the Last Frame id that observe the Outlier MapPoint 
                 nmatches--;
             }
             else if(mCurrentFrame.mvpMapPoints[i]->Observations()>0)
@@ -2779,9 +2802,9 @@ bool Tracking::TrackReferenceKeyFrame()
     }
 
     if (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
-        return true;
+        return true;                // For IMU case, return true
     else
-        return nmatchesMap>=10;
+        return nmatchesMap>=10;     // For non-IMU case, return true if enough MapPoints Matched (>=10)
 }
 
 void Tracking::UpdateLastFrame()

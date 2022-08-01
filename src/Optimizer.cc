@@ -71,7 +71,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
 
     g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
-
+    // Use LM method to optimize
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
     optimizer.setVerbose(false);
@@ -121,8 +121,8 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
         Sophus::SE3<float> Tcw = pKF->GetPose();
         vSE3->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(),Tcw.translation().cast<double>()));
-        vSE3->setId(pKF->mnId);
-        vSE3->setFixed(pKF->mnId==pMap->GetInitKFid());
+        vSE3->setId(pKF->mnId);                             // vertex id is KeyFrame id
+        vSE3->setFixed(pKF->mnId==pMap->GetInitKFid());     // Initial KF pose is fixed
         optimizer.addVertex(vSE3);
         if(pKF->mnId>maxKFid)
             maxKFid=pKF->mnId;
@@ -139,9 +139,9 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
             continue;
         g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
         vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
-        const int id = pMP->mnId+maxKFid+1;
+        const int id = pMP->mnId+maxKFid+1;             // vertex id is maxKFid + 1 + MapPoint_Id
         vPoint->setId(id);
-        vPoint->setMarginalized(true);
+        vPoint->setMarginalized(true);                  // NOTES: MapPoint set to be Marginalized
         optimizer.addVertex(vPoint);
 
        const map<KeyFrame*,tuple<int,int>> observations = pMP->GetObservations();
@@ -159,7 +159,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 
             const int leftIndex = get<0>(mit->second);
 
-            if(leftIndex != -1 && pKF->mvuRight[get<0>(mit->second)]<0)
+            if(leftIndex != -1 && pKF->mvuRight[get<0>(mit->second)]<0) // Mono observation
             {
                 const cv::KeyPoint &kpUn = pKF->mvKeysUn[leftIndex];
 
@@ -171,20 +171,22 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
                 e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));
                 e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));
                 e->setMeasurement(obs);
-                const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];
-                e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);
+                const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];    // Octavel bigger, the invSigma2 smaller, means weight smaller!
+                e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);       // Set information Maxtrix - Weight !
 
                 if(bRobust)
                 {
+                    // Set huber loss
                     g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
                     e->setRobustKernel(rk);
+                    // Set huber param
                     rk->setDelta(thHuber2D);
                 }
 
                 e->pCamera = pKF->mpCamera;
 
                 optimizer.addEdge(e);
-
+                // Save the edge and related vertices for latter use
                 vpEdgesMono.push_back(e);
                 vpEdgeKFMono.push_back(pKF);
                 vpMapPointEdgeMono.push_back(pMP);
@@ -292,10 +294,11 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         g2o::SE3Quat SE3quat = vSE3->estimate();
         if(nLoopKF==pMap->GetOriginKF()->mnId)
         {
+            // Update Twc of KeyFrame with optimized value
             pKF->SetPose(Sophus::SE3f(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>()));
         }
         else
-        {
+        {   // Update mTcwGBA with optimized value
             pKF->mTcwGBA = Sophus::SE3d(SE3quat.rotation(),SE3quat.translation()).cast<float>();
             pKF->mnBAGlobalForKF = nLoopKF;
 
@@ -305,6 +308,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
             double dist = vector_dist.norm();
             if(dist > 1)
             {
+                // Looks like the following code only used for DEBUG!
                 int numMonoBadPoints = 0, numMonoOptPoints = 0;
                 int numStereoBadPoints = 0, numStereoOptPoints = 0;
                 vector<MapPoint*> vpMonoMPsOpt, vpStereoMPsOpt;
@@ -378,11 +382,13 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 
         if(nLoopKF==pMap->GetOriginKF()->mnId)
         {
+            // Update pMP->mWorldPos with optimized value
             pMP->SetWorldPos(vPoint->estimate().cast<float>());
             pMP->UpdateNormalAndDepth();
         }
         else
         {
+            // Update pMP->mPosGBA with optimized value
             pMP->mPosGBA = vPoint->estimate().cast<float>();
             pMP->mnBAGlobalForKF = nLoopKF;
         }
@@ -810,7 +816,7 @@ void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal, const l
     pMap->IncreaseChangeIndex();
 }
 
-
+// Only optimize Pose of given Frame (no MapPoints optimized)
 int Optimizer::PoseOptimization(Frame *pFrame)
 {
     g2o::SparseOptimizer optimizer;

@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
             if(ni>0)
             {
                 // cout << "t_cam " << tframe << endl;
-                // NOTES: all added imu timestamp <= image stamp
+                // NOTES: imu timestamp <= image stamp
                 while(vTimestampsImu[seq][first_imu[seq]]<=vTimestampsCam[seq][ni])
                 {
                     vImuMeas.push_back(ORB_SLAM3::IMU::Point(vAcc[seq][first_imu[seq]].x,vAcc[seq][first_imu[seq]].y,vAcc[seq][first_imu[seq]].z,

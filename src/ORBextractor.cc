@@ -417,6 +417,9 @@ namespace ORB_SLAM3
         mvLevelSigma2[0]=1.0f;
         for(int i=1; i<nlevels; i++)
         {
+            // OpenCV default values: scaleFactor = 1.2, nlevels = 8
+            // mvScaleFactor: 1.0, 1.2,   1.2^2, ..., 1.2^7
+            // mvLevelSigma2: 1.0, 1.2^2, 1,2^4, ..., 1.2^14
             mvScaleFactor[i]=mvScaleFactor[i-1]*scaleFactor;
             mvLevelSigma2[i]=mvScaleFactor[i]*mvScaleFactor[i];
         }
