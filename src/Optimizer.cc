@@ -831,7 +831,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
 
     int nInitialCorrespondences=0;
 
-    // Set Frame vertex
+    // Set Frame vertex --- Only one vertex --- The Pose of the Frame
     g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
     Sophus::SE3<float> Tcw = pFrame->GetPose();
     vSE3->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(),Tcw.translation().cast<double>()));
@@ -3063,7 +3063,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 
     if (priorG!=0.f)
-        solver->setUserLambdaInit(1e3);
+        solver->setUserLambdaInit(1e3); // What is User Lambda Init?
 
     optimizer.setAlgorithm(solver);
 
@@ -3073,11 +3073,14 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
         KeyFrame* pKFi = vpKFs[i];
         if(pKFi->mnId>maxKFid)
             continue;
+
+        // Pose Vertex
         VertexPose * VP = new VertexPose(pKFi);
         VP->setId(pKFi->mnId);
-        VP->setFixed(true);
+        VP->setFixed(true);         // Fix pose of KF
         optimizer.addVertex(VP);
 
+        // Velocity Vertex
         VertexVelocity* VV = new VertexVelocity(pKFi);
         VV->setId(maxKFid+(pKFi->mnId)+1);
         if (bFixedVel)
@@ -3088,7 +3091,8 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
         optimizer.addVertex(VV);
     }
 
-    // Biases
+    // Biases 
+    // Gyro Bias Vertex
     VertexGyroBias* VG = new VertexGyroBias(vpKFs.front());
     VG->setId(maxKFid*2+2);
     if (bFixedVel)
@@ -3096,6 +3100,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     else
         VG->setFixed(false);
     optimizer.addVertex(VG);
+    // Gyro Bias Vertex
     VertexAccBias* VA = new VertexAccBias(vpKFs.front());
     VA->setId(maxKFid*2+3);
     if (bFixedVel)
@@ -3108,11 +3113,13 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     Eigen::Vector3f bprior;
     bprior.setZero();
 
+    // Prior Acc Edage
     EdgePriorAcc* epa = new EdgePriorAcc(bprior);
     epa->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VA));
     double infoPriorA = priorA;
     epa->setInformation(infoPriorA*Eigen::Matrix3d::Identity());
     optimizer.addEdge(epa);
+    // Prior Gyro Edage
     EdgePriorGyro* epg = new EdgePriorGyro(bprior);
     epg->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VG));
     double infoPriorG = priorG;
@@ -3120,10 +3127,12 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     optimizer.addEdge(epg);
 
     // Gravity and scale
+    // Gravity Vertex
     VertexGDir* VGDir = new VertexGDir(Rwg);
     VGDir->setId(maxKFid*2+4);
     VGDir->setFixed(false);
     optimizer.addVertex(VGDir);
+    // Scale Vertex
     VertexScale* VS = new VertexScale(scale);
     VS->setId(maxKFid*2+5);
     VS->setFixed(!bMono); // Fixed for stereo case
@@ -3164,14 +3173,14 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
                 continue;
             }
             EdgeInertialGS* ei = new EdgeInertialGS(pKFi->mpImuPreintegrated);
-            ei->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VP1));
-            ei->setVertex(1,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VV1));
-            ei->setVertex(2,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VG));
-            ei->setVertex(3,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VA));
-            ei->setVertex(4,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VP2));
-            ei->setVertex(5,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VV2));
-            ei->setVertex(6,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VGDir));
-            ei->setVertex(7,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VS));
+            ei->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VP1));     // PrevKF Pose
+            ei->setVertex(1,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VV1));     // PrevKF velocity
+            ei->setVertex(2,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VG));      // Gyro Bias
+            ei->setVertex(3,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VA));      // Acc Bias
+            ei->setVertex(4,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VP2));     // CurKF Pos
+            ei->setVertex(5,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VV2));     // CurKF Velocity
+            ei->setVertex(6,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VGDir));   // Gravity direction
+            ei->setVertex(7,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VS));      // Scale
 
             vpei.push_back(ei);
 
@@ -3218,6 +3227,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
 
         if ((pKFi->GetGyroBias() - bg.cast<float>()).norm() > 0.01)
         {
+            // Gyro bias is too big, do IMU reinteration
             pKFi->SetNewBias(b);
             if (pKFi->mpImuPreintegrated)
                 pKFi->mpImuPreintegrated->Reintegrate();

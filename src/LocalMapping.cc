@@ -135,6 +135,7 @@ void LocalMapping::Run()
                             mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
                         if(!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                         {
+                            // Initial time <10s and motion < 0.02m
                             if((mTinit<10.f) && (dist<0.02))
                             {
                                 cout << "Not enough motion for initializing. Reseting..." << endl;
@@ -284,8 +285,8 @@ void LocalMapping::Run()
 void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
 {
     unique_lock<mutex> lock(mMutexNewKFs);
-    mlNewKeyFrames.push_back(pKF);
-    mbAbortBA=true;
+    mlNewKeyFrames.push_back(pKF);      // Add KF to mlNewKeyFrames  
+    mbAbortBA=true;                     // Enable AbortBA
 }
 
 
@@ -323,7 +324,8 @@ void LocalMapping::ProcessNewKeyFrame()
                     pMP->ComputeDistinctiveDescriptors();
                 }
                 else // this can only happen for new stereo points inserted by the Tracking
-                {
+                {   
+                    // Recently inserted MapPoints
                     mlpRecentAddedMapPoints.push_back(pMP);
                 }
             }
@@ -363,19 +365,19 @@ void LocalMapping::MapPointCulling()
         MapPoint* pMP = *lit;
 
         if(pMP->isBad())
-            lit = mlpRecentAddedMapPoints.erase(lit);
+            lit = mlpRecentAddedMapPoints.erase(lit);   // Erase bad MapPoint
         else if(pMP->GetFoundRatio()<0.25f)
         {
             pMP->SetBadFlag();
-            lit = mlpRecentAddedMapPoints.erase(lit);
+            lit = mlpRecentAddedMapPoints.erase(lit);   // Erase the MapPoint that not freqently seen (FoundRation < 0.25) 
         }
         else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=2 && pMP->Observations()<=cnThObs)
         {
             pMP->SetBadFlag();
-            lit = mlpRecentAddedMapPoints.erase(lit);
+            lit = mlpRecentAddedMapPoints.erase(lit);   // Erase the MapPoint whose observation <= 2 (or 3)
         }
         else if(((int)nCurrentKFid-(int)pMP->mnFirstKFid)>=3)
-            lit = mlpRecentAddedMapPoints.erase(lit);
+            lit = mlpRecentAddedMapPoints.erase(lit);   // Erase the MapPoint observed by at least 4 KF
         else
         {
             lit++;
@@ -1188,7 +1190,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         nMinKF = 10;
     }
 
-    // Don't do IMU initialization if there's no enough KeyFrames (< 10) 
+    // Don't do IMU initialization if there's no enough KeyFrames in Map (< 10) 
     if(mpAtlas->KeyFramesInMap()<nMinKF)
         return;
 
@@ -1202,16 +1204,17 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     }
     lpKF.push_front(pKF);
     vector<KeyFrame*> vpKF(lpKF.begin(),lpKF.end());
-
+    //  Don't do IMU initialization if no enough KeyFrams connected with current KeyFrames
     if(vpKF.size()<nMinKF)
         return;
 
     mFirstTs=vpKF.front()->mTimeStamp;
+    // Don't do IMU initialization if duation time < 2.0s (for mono case)
     if(mpCurrentKeyFrame->mTimeStamp-mFirstTs<minTime)
         return;
 
     bInitializing = true;
-
+    // Process new inserted KeyFrames which will also be optimized
     while(CheckNewKeyFrames())
     {
         ProcessNewKeyFrame();
@@ -1234,7 +1237,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
                 continue;
             if (!(*itKF)->mPrevKF)
                 continue;
-
+            // Estimate dirG, velocity of each KF
             dirG -= (*itKF)->mPrevKF->GetImuRotation() * (*itKF)->mpImuPreintegrated->GetUpdatedDeltaVelocity();
             Eigen::Vector3f _vel = ((*itKF)->GetImuPosition() - (*itKF)->mPrevKF->GetImuPosition())/(*itKF)->mpImuPreintegrated->dT;
             (*itKF)->SetVelocity(_vel);
@@ -1247,9 +1250,9 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         const float nv = v.norm();
         const float cosg = gI.dot(dirG);
         const float ang = acos(cosg);
-        Eigen::Vector3f vzg = v*ang/nv;
-        Rwg = Sophus::SO3f::exp(vzg).matrix();
-        mRwg = Rwg.cast<double>();
+        Eigen::Vector3f vzg = v*ang/nv;                     // Rotate around axis v 
+        Rwg = Sophus::SO3f::exp(vzg).matrix();              // Rotation matrix
+        mRwg = Rwg.cast<double>();                          // Used to rotate the Gravity 
         mTinit = mpCurrentKeyFrame->mTimeStamp-mFirstTs;
     }
     else
@@ -1264,6 +1267,8 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     mInitTime = mpTracker->mLastFrame.mTimeStamp-vpKF.front()->mTimeStamp;
 
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    
+    // Here, do IMU initialization optimization
     Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, false, false, priorG, priorA);
 
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();

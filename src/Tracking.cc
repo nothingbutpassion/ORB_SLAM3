@@ -1649,18 +1649,22 @@ void Tracking::PreintegrateIMU()
             {
                 IMU::Point* m = &mlQueueImuData.front();
                 cout.precision(17);
-                // IMU timestamp shouldn't be less than previous image timestamp 
+                
+                // Default value of mImuPer is 0.001 
                 if(m->t<mCurrentFrame.mpPrevFrame->mTimeStamp-mImuPer)
                 {
+                    // IMU timestamp shouldn't be less than previous image timestamp
                     mlQueueImuData.pop_front();
                 }
                 else if(m->t<mCurrentFrame.mTimeStamp-mImuPer)
                 {
+                    // IMU timestamp <= current Frame timestamp - 0.001
                     mvImuFromLastFrame.push_back(*m);
                     mlQueueImuData.pop_front();
                 }
                 else
-                {
+                {   // IMU timestamp >= current Frame timestamp - 0.001
+                    // This is the last imu point
                     mvImuFromLastFrame.push_back(*m);
                     break;
                 }
@@ -1728,9 +1732,9 @@ void Tracking::PreintegrateIMU()
             tstep = mCurrentFrame.mTimeStamp-mCurrentFrame.mpPrevFrame->mTimeStamp;
         }
 
+        // NOTES: It's dangerous if mpImuPreintegratedFromLastKF is null
         if (!mpImuPreintegratedFromLastKF)
             cout << "mpImuPreintegratedFromLastKF does not exist" << endl;
-        // NOTES: It's dangerous if mpImuPreintegratedFromLastKF is null
         mpImuPreintegratedFromLastKF->IntegrateNewMeasurement(acc,angVel,tstep);    // Preintegrated since last KF
         pImuPreintegratedFromLastFrame->IntegrateNewMeasurement(acc,angVel,tstep);  // Preintegrated for current Frame
     }
@@ -1755,6 +1759,7 @@ bool Tracking::PredictStateIMU()
 
     if(mbMapUpdated && mpLastKeyFrame)
     {
+        // Predict pose & velocity with IMU preintegration since last KeyFrame
         const Eigen::Vector3f twb1 = mpLastKeyFrame->GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mpLastKeyFrame->GetImuRotation();
         const Eigen::Vector3f Vwb1 = mpLastKeyFrame->GetVelocity();
@@ -1773,6 +1778,7 @@ bool Tracking::PredictStateIMU()
     }
     else if(!mbMapUpdated)
     {
+        // Predict pose & velocity with IMU preintegration since last Frame
         const Eigen::Vector3f twb1 = mLastFrame.GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mLastFrame.GetImuRotation();
         const Eigen::Vector3f Vwb1 = mLastFrame.GetVelocity();
@@ -1800,7 +1806,12 @@ void Tracking::ResetFrameIMU()
     // TODO To implement...
 }
 
-
+// NOTES:
+// mState = NO_IMAGES_YET   in In constructor of Tracking
+// mState = NOT_INITIALIZED if image available
+// mState = OK              if initialized
+// mState = RECENTLY_LOST   if recently track lost
+// mState = LOST            if track lost for a long time
 void Tracking::Track()
 {
 
@@ -1865,7 +1876,7 @@ void Tracking::Track()
         }
     }
 
-
+    // Current Frame IMU bias is set same as Last KeyFrame if last KeyFrame exist
     if ((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && mpLastKeyFrame)
         mCurrentFrame.SetNewBias(mpLastKeyFrame->GetImuBias());
 
@@ -1884,6 +1895,7 @@ void Tracking::Track()
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartPreIMU = std::chrono::steady_clock::now();
 #endif
+        // IMU Preintegration for current Frame
         PreintegrateIMU();
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndPreIMU = std::chrono::steady_clock::now();
@@ -1960,18 +1972,20 @@ void Tracking::Track()
 
                 if((!mbVelocity && !pCurrentMap->isImuInitialized()) || mCurrentFrame.mnId<mnLastRelocFrameId+2)
                 {
+                    // Track with respect to the reference KF if IMU not initialized or just after last relocation
                     Verbose::PrintMess("TRACK: Track with respect to the reference KF ", Verbose::VERBOSITY_DEBUG);
                     bOK = TrackReferenceKeyFrame();
                 }
                 else
                 {
+                    // Track with motion model
                     Verbose::PrintMess("TRACK: Track with motion model", Verbose::VERBOSITY_DEBUG);
                     bOK = TrackWithMotionModel();
                     if(!bOK)
-                        bOK = TrackReferenceKeyFrame();
+                        bOK = TrackReferenceKeyFrame(); // if motion model failed, track with reference KF again
                 }
-
-
+                
+                // Track failed
                 if (!bOK)
                 {
                     if ( mCurrentFrame.mnId<=(mnLastRelocFrameId+mnFramesToResetIMU) &&
@@ -2029,7 +2043,7 @@ void Tracking::Track()
                 }
                 else if (mState == LOST)
                 {
-
+                    // Create a new Map if Track LOST
                     Verbose::PrintMess("A new map is started...", Verbose::VERBOSITY_NORMAL);
 
                     if (pCurrentMap->KeyFramesInMap()<10)
@@ -2106,6 +2120,7 @@ void Tracking::Track()
                             {
                                 if(mCurrentFrame.mvpMapPoints[i] && !mCurrentFrame.mvbOutlier[i])
                                 {
+                                    // For VO case, increase found count of MapPoint
                                     mCurrentFrame.mvpMapPoints[i]->IncreaseFound();
                                 }
                             }
@@ -2467,7 +2482,7 @@ void Tracking::MonocularInitialization()
     if(!mbReadyToInitializate)
     {
         // Set Reference Frame
-        // Initial condition: initial Frame must have enough features (> 100)
+        // Initialization condition: initial Frame must have enough features (> 100)
         if(mCurrentFrame.mvKeys.size()>100)
         {
 
@@ -2500,6 +2515,9 @@ void Tracking::MonocularInitialization()
     }
     else
     {
+        // Initialization condition: 
+        // Current Frame must have enough features (> 100)
+        // If IMU mono case, the duration between current frame and initial frame should too long (>1.0s)
         if (((int)mCurrentFrame.mvKeys.size()<=100)||((mSensor == System::IMU_MONOCULAR)&&(mLastFrame.mTimeStamp-mInitialFrame.mTimeStamp>1.0)))
         {
             mbReadyToInitializate = false;
@@ -2511,7 +2529,7 @@ void Tracking::MonocularInitialization()
         ORBmatcher matcher(0.9,true);
         int nmatches = matcher.SearchForInitialization(mInitialFrame,mCurrentFrame,mvbPrevMatched,mvIniMatches,100);
 
-        // Initial condition: Each frame must have enough matches with initial frame (>= 100)
+        // Initialization condition: Each frame must have enough matches with initial frame (>= 100)
         // Check if there are enough correspondences
         if(nmatches<100)
         {
@@ -2612,7 +2630,7 @@ void Tracking::CreateInitialMapMonocular()
         invMedianDepth = 4.0f/medianDepth; // 4.0f
     else
         invMedianDepth = 1.0f/medianDepth;
-    // Initialize conditon: if tracked MapPoints is not enough (< 50), init faliled
+    // Initialization conditon: if tracked MapPoints is not enough (< 50), init faliled
     if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<50) // TODO Check, originally 100 tracks
     {
         Verbose::PrintMess("Wrong initialization, reseting...", Verbose::VERBOSITY_QUIET);
@@ -2639,8 +2657,10 @@ void Tracking::CreateInitialMapMonocular()
 
     if (mSensor == System::IMU_MONOCULAR)
     {
+        // Update connection between current KF and previous KF
         pKFcur->mPrevKF = pKFini;
         pKFini->mNextKF = pKFcur;
+        // Save the Preintegrated object from Last KF
         pKFcur->mpImuPreintegrated = mpImuPreintegratedFromLastKF;
         // Create a new Preintegrated object for preintegration since the current KeyFrame
         mpImuPreintegratedFromLastKF = new IMU::Preintegrated(pKFcur->mpImuPreintegrated->GetUpdatedBias(),pKFcur->mImuCalib);
@@ -2649,7 +2669,7 @@ void Tracking::CreateInitialMapMonocular()
     // Add initial & current KeyFrame to LocalMapping
     mpLocalMapper->InsertKeyFrame(pKFini);
     mpLocalMapper->InsertKeyFrame(pKFcur);
-    mpLocalMapper->mFirstTs=pKFcur->mTimeStamp;
+    mpLocalMapper->mFirstTs=pKFcur->mTimeStamp;  // Set Fist KF timestap
 
     // Update current Frame pose
     mCurrentFrame.SetPose(pKFcur->GetPose());
@@ -2664,7 +2684,7 @@ void Tracking::CreateInitialMapMonocular()
     mpReferenceKF = pKFcur;                 // The Reference KF point to Current KeyFrame
     mCurrentFrame.mpReferenceKF = pKFcur;   
 
-    // Compute here initial velocity, --- Never used !
+    // Compute here initial velocity, --- vKFS, deltaT, phi Never used !
     vector<KeyFrame*> vKFs = mpAtlas->GetAllKeyFrames();
 
     Sophus::SE3f deltaT = vKFs.back()->GetPose() * vKFs.front()->GetPoseInverse();
@@ -2738,7 +2758,8 @@ void Tracking::CheckReplacedInLastFrame()
         {
             MapPoint* pRep = pMP->GetReplaced();
             if(pRep)
-            {
+            {   
+                // Set MapPoint with the one updated by Local Mapping optimization
                 mLastFrame.mvpMapPoints[i] = pRep;
             }
         }
@@ -2757,7 +2778,7 @@ bool Tracking::TrackReferenceKeyFrame()
     vector<MapPoint*> vpMapPointMatches;
 
     int nmatches = matcher.SearchByBoW(mpReferenceKF,mCurrentFrame,vpMapPointMatches);
-
+    // Track failed if no enough matches (<15)
     if(nmatches<15)
     {
         cout << "TRACK_REF_KF: Less than 15 matches!!\n";
@@ -2765,13 +2786,13 @@ bool Tracking::TrackReferenceKeyFrame()
     }
 
     mCurrentFrame.mvpMapPoints = vpMapPointMatches;
-    mCurrentFrame.SetPose(mLastFrame.GetPose());
+    mCurrentFrame.SetPose(mLastFrame.GetPose());        // Init current frame pose with last frame pose
 
     //mCurrentFrame.PrintPointDistribution();
 
 
     // cout << " TrackReferenceKeyFrame mLastFrame.mTcw:  " << mLastFrame.mTcw << endl;
-    Optimizer::PoseOptimization(&mCurrentFrame);
+    Optimizer::PoseOptimization(&mCurrentFrame);        // Optimize current Frame Pose
 
     // Discard outliers
     int nmatchesMap = 0;
@@ -2814,6 +2835,7 @@ void Tracking::UpdateLastFrame()
     Sophus::SE3f Tlr = mlRelativeFramePoses.back();
     mLastFrame.SetPose(Tlr * pRef->GetPose());
 
+    // For Mono or IMU Mono case, just return
     if(mnLastKeyFrameId==mLastFrame.mnId || mSensor==System::MONOCULAR || mSensor==System::IMU_MONOCULAR || !mbOnlyTracking)
         return;
 
@@ -2886,11 +2908,12 @@ bool Tracking::TrackWithMotionModel()
 
     // Update last frame pose according to its reference keyframe
     // Create "visual odometry" points if in Localization Mode
-    UpdateLastFrame();
+    UpdateLastFrame();  // Only for stereo/RGB-D case
 
     if (mpAtlas->isImuInitialized() && (mCurrentFrame.mnId>mnLastRelocFrameId+mnFramesToResetIMU))
     {
         // Predict state with IMU if it is initialized and it doesnt need reset
+        // Predict pose & velocity with IMU preintegration since last Frame (or KeyFrame) 
         PredictStateIMU();
         return true;
     }
@@ -2917,9 +2940,11 @@ bool Tracking::TrackWithMotionModel()
     // If few matches, uses a wider window search
     if(nmatches<20)
     {
+        // Search with given threshold
         Verbose::PrintMess("Not enough matches, wider window search!!", Verbose::VERBOSITY_NORMAL);
         fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
 
+        // Search with bigger threshold
         nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,2*th,mSensor==System::MONOCULAR || mSensor==System::IMU_MONOCULAR);
         Verbose::PrintMess("Matches with wider search: " + to_string(nmatches), Verbose::VERBOSITY_NORMAL);
 
@@ -2929,7 +2954,7 @@ bool Tracking::TrackWithMotionModel()
     {
         Verbose::PrintMess("Not enough matches!!", Verbose::VERBOSITY_NORMAL);
         if (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
-            return true;
+            return true;        // For IMU case, it's OK!
         else
             return false;
     }
@@ -2965,12 +2990,12 @@ bool Tracking::TrackWithMotionModel()
 
     if(mbOnlyTracking)
     {
-        mbVO = nmatchesMap<10;
-        return nmatches>20;
+        mbVO = nmatchesMap<10;      // Enable VO model
+        return nmatches>20;         // For Tracking mode, require >20 matches
     }
 
     if (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
-        return true;
+        return true;                // For IMU case, it's OK!
     else
         return nmatchesMap>=10;
 }
@@ -3039,6 +3064,7 @@ bool Tracking::TrackLocalMap()
         {
             if(!mCurrentFrame.mvbOutlier[i])
             {
+                // Increase found count of MapPoint
                 mCurrentFrame.mvpMapPoints[i]->IncreaseFound();
                 if(!mbOnlyTracking)
                 {
