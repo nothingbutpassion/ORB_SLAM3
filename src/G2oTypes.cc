@@ -599,7 +599,7 @@ EdgeInertialGS::EdgeInertialGS(IMU::Preintegrated *pInt):JRg(pInt->JRg.cast<doub
 {
     // This edge links 8 vertices
     resize(8);
-    gI << 0, 0, -IMU::GRAVITY_VALUE;
+    gI << 0, 0, -IMU::GRAVITY_VALUE;    // gI is (0, 0, -9.81)
 
     Matrix9d Info = pInt->C.block<9,9>(0,0).cast<double>().inverse();
     Info = (Info+Info.transpose())/2;
@@ -641,14 +641,14 @@ void EdgeInertialGS::computeError()
 
 void EdgeInertialGS::linearizeOplus()
 {
-    const VertexPose* VP1 = static_cast<const VertexPose*>(_vertices[0]);
-    const VertexVelocity* VV1= static_cast<const VertexVelocity*>(_vertices[1]);
-    const VertexGyroBias* VG= static_cast<const VertexGyroBias*>(_vertices[2]);
-    const VertexAccBias* VA= static_cast<const VertexAccBias*>(_vertices[3]);
-    const VertexPose* VP2 = static_cast<const VertexPose*>(_vertices[4]);
-    const VertexVelocity* VV2 = static_cast<const VertexVelocity*>(_vertices[5]);
-    const VertexGDir* VGDir = static_cast<const VertexGDir*>(_vertices[6]);
-    const VertexScale* VS = static_cast<const VertexScale*>(_vertices[7]);
+    const VertexPose* VP1 = static_cast<const VertexPose*>(_vertices[0]);           // P1
+    const VertexVelocity* VV1= static_cast<const VertexVelocity*>(_vertices[1]);    // V1
+    const VertexGyroBias* VG= static_cast<const VertexGyroBias*>(_vertices[2]);     // Bg
+    const VertexAccBias* VA= static_cast<const VertexAccBias*>(_vertices[3]);       // Ba
+    const VertexPose* VP2 = static_cast<const VertexPose*>(_vertices[4]);           // P2
+    const VertexVelocity* VV2 = static_cast<const VertexVelocity*>(_vertices[5]);   // V2
+    const VertexGDir* VGDir = static_cast<const VertexGDir*>(_vertices[6]);         // gDir
+    const VertexScale* VS = static_cast<const VertexScale*>(_vertices[7]);          // scale    
     const IMU::Bias b(VA->estimate()[0],VA->estimate()[1],VA->estimate()[2],VG->estimate()[0],VG->estimate()[1],VG->estimate()[2]);
     const IMU::Bias db = mpInt->GetDeltaBias(b);
 
@@ -669,7 +669,10 @@ void EdgeInertialGS::linearizeOplus()
     const Eigen::Vector3d er = LogSO3(eR);
     const Eigen::Matrix3d invJr = InverseRightJacobianSO3(er);
 
-    // Jacobians wrt Pose 1
+    // NOTES: 
+    // See paper On-Manifold_Preintegration_for_Real-Time_VIO
+
+    // Jacobians wrt Pose 1 (9x6 matrix)
     _jacobianOplus[0].setZero();
      // rotation
     _jacobianOplus[0].block<3,3>(0,0) = -invJr*Rwb2.transpose()*Rwb1;
@@ -679,18 +682,18 @@ void EdgeInertialGS::linearizeOplus()
     // translation
     _jacobianOplus[0].block<3,3>(6,3) = Eigen::DiagonalMatrix<double,3>(-s,-s,-s);
 
-    // Jacobians wrt Velocity 1
+    // Jacobians wrt Velocity 1  (9x3 matrix)
     _jacobianOplus[1].setZero();
     _jacobianOplus[1].block<3,3>(3,0) = -s*Rbw1;
     _jacobianOplus[1].block<3,3>(6,0) = -s*Rbw1*dt;
 
-    // Jacobians wrt Gyro bias
+    // Jacobians wrt Gyro bias (9x3 matrix)
     _jacobianOplus[2].setZero();
     _jacobianOplus[2].block<3,3>(0,0) = -invJr*eR.transpose()*RightJacobianSO3(JRg*dbg)*JRg;
     _jacobianOplus[2].block<3,3>(3,0) = -JVg;
     _jacobianOplus[2].block<3,3>(6,0) = -JPg;
 
-    // Jacobians wrt Accelerometer bias
+    // Jacobians wrt Accelerometer bias (9x3 matrix)
     _jacobianOplus[3].setZero();
     _jacobianOplus[3].block<3,3>(3,0) = -JVa;
     _jacobianOplus[3].block<3,3>(6,0) = -JPa;
@@ -706,12 +709,12 @@ void EdgeInertialGS::linearizeOplus()
     _jacobianOplus[5].setZero();
     _jacobianOplus[5].block<3,3>(3,0) = s*Rbw1;
 
-    // Jacobians wrt Gravity direction
+    // Jacobians wrt Gravity direction (9x2 matrix)
     _jacobianOplus[6].setZero();
     _jacobianOplus[6].block<3,2>(3,0) = -Rbw1*dGdTheta*dt;
     _jacobianOplus[6].block<3,2>(6,0) = -0.5*Rbw1*dGdTheta*dt*dt;
 
-    // Jacobians wrt scale factor
+    // Jacobians wrt scale factor (9x1 matrix)
     _jacobianOplus[7].setZero();
     _jacobianOplus[7].block<3,1>(3,0) = Rbw1*(VV2->estimate()-VV1->estimate());
     _jacobianOplus[7].block<3,1>(6,0) = Rbw1*(VP2->estimate().twb-VP1->estimate().twb-VV1->estimate()*dt);

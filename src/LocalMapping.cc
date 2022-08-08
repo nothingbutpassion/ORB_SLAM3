@@ -121,6 +121,7 @@ void LocalMapping::Run()
             int num_MPs_BA = 0;
             int num_edges_BA = 0;
 
+            // Do optimization if no new keyframs and no stop request
             if(!CheckNewKeyFrames() && !stopRequested())
             {
                 if(mpAtlas->KeyFramesInMap()>2)
@@ -1268,7 +1269,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
     
-    // Here, do IMU initialization optimization
+    // Here, do IMU initialization optimization, then we got optimized Rwg, sacle, bg, ba
     Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, false, false, priorG, priorA);
 
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();

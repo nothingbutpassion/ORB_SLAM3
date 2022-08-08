@@ -3100,7 +3100,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     else
         VG->setFixed(false);
     optimizer.addVertex(VG);
-    // Gyro Bias Vertex
+    // Acc Bias Vertex
     VertexAccBias* VA = new VertexAccBias(vpKFs.front());
     VA->setId(maxKFid*2+3);
     if (bFixedVel)
@@ -3111,7 +3111,8 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     optimizer.addVertex(VA);
     // prior acc bias
     Eigen::Vector3f bprior;
-    bprior.setZero();
+    // Here Acc & Gyro prior is set as zero
+    bprior.setZero();   
 
     // Prior Acc Edage
     EdgePriorAcc* epa = new EdgePriorAcc(bprior);

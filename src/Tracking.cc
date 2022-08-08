@@ -4052,6 +4052,7 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
 
         if(pKF->GetMap() == pMap)
         {
+            // Translation is multiplied by s
             (*lit).translation() *= s;
         }
     }
@@ -4071,12 +4072,14 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
 
     if(mLastFrame.mnId == mLastFrame.mpLastKeyFrame->mnFrameId)
     {
+        // Last Frame is a KeyFrame
         mLastFrame.SetImuPoseVelocity(mLastFrame.mpLastKeyFrame->GetImuRotation(),
                                       mLastFrame.mpLastKeyFrame->GetImuPosition(),
                                       mLastFrame.mpLastKeyFrame->GetVelocity());
     }
     else
     {
+        // Last Frame is not a KeyFrame
         const Eigen::Vector3f Gz(0, 0, -IMU::GRAVITY_VALUE);
         const Eigen::Vector3f twb1 = mLastFrame.mpLastKeyFrame->GetImuPosition();
         const Eigen::Matrix3f Rwb1 = mLastFrame.mpLastKeyFrame->GetImuRotation();

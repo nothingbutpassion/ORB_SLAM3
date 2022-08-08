@@ -579,38 +579,38 @@ public:
     Eigen::Matrix<double,27,27> GetHessian(){
         linearizeOplus();
         Eigen::Matrix<double,9,27> J;
-        J.block<9,6>(0,0) = _jacobianOplus[0];
-        J.block<9,3>(0,6) = _jacobianOplus[1];
-        J.block<9,3>(0,9) = _jacobianOplus[2];
-        J.block<9,3>(0,12) = _jacobianOplus[3];
-        J.block<9,6>(0,15) = _jacobianOplus[4];
-        J.block<9,3>(0,21) = _jacobianOplus[5];
-        J.block<9,2>(0,24) = _jacobianOplus[6];
-        J.block<9,1>(0,26) = _jacobianOplus[7];
+        J.block<9,6>(0,0) = _jacobianOplus[0];      // P1
+        J.block<9,3>(0,6) = _jacobianOplus[1];      // V1
+        J.block<9,3>(0,9) = _jacobianOplus[2];      // Bg
+        J.block<9,3>(0,12) = _jacobianOplus[3];     // Ba
+        J.block<9,6>(0,15) = _jacobianOplus[4];     // P2
+        J.block<9,3>(0,21) = _jacobianOplus[5];     // V2
+        J.block<9,2>(0,24) = _jacobianOplus[6];     // gDir
+        J.block<9,1>(0,26) = _jacobianOplus[7];     // scale
         return J.transpose()*information()*J;
     }
 
     Eigen::Matrix<double,27,27> GetHessian2(){
         linearizeOplus();
         Eigen::Matrix<double,9,27> J;
-        J.block<9,3>(0,0) = _jacobianOplus[2];
-        J.block<9,3>(0,3) = _jacobianOplus[3];
-        J.block<9,2>(0,6) = _jacobianOplus[6];
-        J.block<9,1>(0,8) = _jacobianOplus[7];
-        J.block<9,3>(0,9) = _jacobianOplus[1];
-        J.block<9,3>(0,12) = _jacobianOplus[5];
-        J.block<9,6>(0,15) = _jacobianOplus[0];
-        J.block<9,6>(0,21) = _jacobianOplus[4];
+        J.block<9,3>(0,0) = _jacobianOplus[2];      // Bg
+        J.block<9,3>(0,3) = _jacobianOplus[3];      // Ba
+        J.block<9,2>(0,6) = _jacobianOplus[6];      // gDir
+        J.block<9,1>(0,8) = _jacobianOplus[7];      // scale
+        J.block<9,3>(0,9) = _jacobianOplus[1];      // V1
+        J.block<9,3>(0,12) = _jacobianOplus[5];     // V2
+        J.block<9,6>(0,15) = _jacobianOplus[0];     // P1
+        J.block<9,6>(0,21) = _jacobianOplus[4];     // P2
         return J.transpose()*information()*J;
     }
 
     Eigen::Matrix<double,9,9> GetHessian3(){
         linearizeOplus();
         Eigen::Matrix<double,9,9> J;
-        J.block<9,3>(0,0) = _jacobianOplus[2];
-        J.block<9,3>(0,3) = _jacobianOplus[3];
-        J.block<9,2>(0,6) = _jacobianOplus[6];
-        J.block<9,1>(0,8) = _jacobianOplus[7];
+        J.block<9,3>(0,0) = _jacobianOplus[2];      // Bg
+        J.block<9,3>(0,3) = _jacobianOplus[3];      // Ba
+        J.block<9,2>(0,6) = _jacobianOplus[6];      // gDir
+        J.block<9,1>(0,8) = _jacobianOplus[7];      // scale
         return J.transpose()*information()*J;
     }
 
@@ -786,6 +786,7 @@ public:
     virtual bool read(std::istream& is){return false;}
     virtual bool write(std::ostream& os) const{return false;}
 
+    // Acc bias should close to the prior
     void computeError(){
         const VertexAccBias* VA = static_cast<const VertexAccBias*>(_vertices[0]);
         _error = bprior - VA->estimate();
