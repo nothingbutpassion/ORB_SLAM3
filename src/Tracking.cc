@@ -1653,7 +1653,7 @@ void Tracking::PreintegrateIMU()
                 // Default value of mImuPer is 0.001 
                 if(m->t<mCurrentFrame.mpPrevFrame->mTimeStamp-mImuPer)
                 {
-                    // IMU timestamp shouldn't be less than previous image timestamp
+                    // IMU timestamp shouldn't be less than previous image timestamp - 0.001
                     mlQueueImuData.pop_front();
                 }
                 else if(m->t<mCurrentFrame.mTimeStamp-mImuPer)
@@ -1665,6 +1665,7 @@ void Tracking::PreintegrateIMU()
                 else
                 {   // IMU timestamp >= current Frame timestamp - 0.001
                     // This is the last imu point
+                    // Notice that The imu point is still in Queue (not poped)
                     mvImuFromLastFrame.push_back(*m);
                     break;
                 }
